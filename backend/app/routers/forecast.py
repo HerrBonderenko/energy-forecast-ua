@@ -121,3 +121,60 @@ async def get_actual_load(hours: int = 24):
         "points": len(data),
         "data": data,
     }
+
+
+@router.get("/debug-entsoe")
+async def debug_entsoe():
+    """Debug — діагностика ENTSO-E підключення."""
+    import os
+    import datetime
+    import aiohttp
+    from app.services.entsoe_client import (
+        ENTSOE_URL, UKRAINE_EIC, _get_token, fetch_actual_load
+    )
+
+    token = _get_token()
+    if not token:
+        return {"error": "no token"}
+
+    # Спробуємо різні EIC коди для України
+    eic_codes = [
+        ("UA_IPS",     "10Y1001C--00003F"),
+        ("UA-BEI",     "10YUA-WEPS-----0"),
+        ("UA",         "10YUA----------A"),
+    ]
+
+    now = datetime.datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    start = now - datetime.timedelta(days=2)
+
+    results = {}
+    for name, eic in eic_codes:
+        params = {
+            "securityToken": token,
+            "documentType": "A65",
+            "processType": "A16",
+            "outBiddingZone_Domain": eic,
+            "periodStart": start.strftime("%Y%m%d%H%M"),
+            "periodEnd":   now.strftime("%Y%m%d%H%M"),
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    ENTSOE_URL, params=params,
+                    timeout=aiohttp.ClientTimeout(total=20)
+                ) as resp:
+                    text = await resp.text()
+                    results[name] = {
+                        "eic": eic,
+                        "status": resp.status,
+                        "response_preview": text[:500],
+                    }
+        except Exception as e:
+            results[name] = {"eic": eic, "error": str(e)}
+
+    return {
+        "token_length": len(token),
+        "period_start": start.strftime("%Y%m%d%H%M"),
+        "period_end": now.strftime("%Y%m%d%H%M"),
+        "tests": results,
+    }
