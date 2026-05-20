@@ -99,3 +99,25 @@ def quick_preview(hours: int = 24):
         calendar_params={"is_holiday": False, "is_pre_holiday": False, "is_school_break": False},
     )
     return {"start": now.isoformat() + "Z", "points": points}
+
+
+@router.get("/actual-load")
+async def get_actual_load(hours: int = 24):
+    """Реальне споживання з ENTSO-E за останні N годин."""
+    from app.services.entsoe_client import fetch_actual_load, is_configured
+    import datetime
+
+    if not is_configured():
+        return {"status": "not_configured", "data": []}
+
+    now = datetime.datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    start = now - datetime.timedelta(hours=hours)
+
+    data = await fetch_actual_load(start, now)
+    return {
+        "status": "ok",
+        "source": "ENTSO-E",
+        "country": "Ukraine (UA_IPS)",
+        "points": len(data),
+        "data": data,
+    }

@@ -1,40 +1,46 @@
 """
-ANFIS (Adaptive Neuro-Fuzzy Inference System) для прогнозування
-погодинного споживання електроенергії в ОЕС України.
-
-Реалізація: Sugeno-type ANFIS з гібридним навчанням
-- Forward pass: метод найменших квадратів (LSE)
-- Backward pass: градієнтний спуск
+ANFIS для прогнозування погодинного споживання електроенергії в ОЕС України.
+Використовує реальну базову криву з ENTSO-E якщо доступна.
 """
 
 import numpy as np
 import datetime
-from pathlib import Path
 
-MODEL_PATH = Path(__file__).parent.parent.parent / "data" / "anfis_model.joblib"
-
-# ── Базова крива навантаження ОЕС України ────────────────────────────────────
-# Типовий добовий профіль (ГВт), робочий день, весна/осінь
-BASE_LOAD = [
-    11.8, 11.2, 10.8, 10.6, 10.7, 11.0,  # 00-05 нічний мінімум
-    12.2, 13.8, 15.1, 15.7, 15.9, 15.8,  # 06-11 ранковий пік
-    15.6, 15.4, 15.2, 15.1, 15.4, 16.2,  # 12-17 денне плато
-    16.8, 16.5, 15.7, 14.5, 13.4, 12.5,  # 18-23 вечірній пік
+# Резервна крива (якщо ENTSO-E недоступний)
+BASE_LOAD_FALLBACK = [
+    11.8, 11.2, 10.8, 10.6, 10.7, 11.0,
+    12.2, 13.8, 15.1, 15.7, 15.9, 15.8,
+    15.6, 15.4, 15.2, 15.1, 15.4, 16.2,
+    16.8, 16.5, 15.7, 14.5, 13.4, 12.5,
 ]
 
+# Кешована крива (оновлюється при старті і раз на добу)
+_cached_base_load: list[float] | None = None
+_cache_updated_at: datetime.datetime | None = None
 
-def get_base_load(hour: int) -> float:
-    """Базове навантаження для конкретної години (ГВт)."""
-    return BASE_LOAD[hour % 24]
+BASE_LOAD = BASE_LOAD_FALLBACK  # використовується в роутерах
+
+
+def get_base_load_curve() -> list[float]:
+    """Повертає актуальну базову криву навантаження."""
+    if _cached_base_load is not None:
+        return _cached_base_load
+    return BASE_LOAD_FALLBACK
+
+
+def set_base_load_curve(curve: list[float]) -> None:
+    """Встановлює криву отриману з ENTSO-E."""
+    global _cached_base_load, _cache_updated_at, BASE_LOAD
+    _cached_base_load = curve
+    _cache_updated_at = datetime.datetime.utcnow()
+    BASE_LOAD = curve
 
 
 def seasonal_factor(month: int) -> float:
-    """Сезонний коефіцієнт. Зима: ~1.22, Літо: ~0.78."""
     return 1.0 + 0.22 * np.cos(2 * np.pi * (month - 1) / 12)
 
 
 def weekend_factor(day_of_week: int) -> float:
-    """Коефіцієнт вихідного дня (0=пн ... 6=нд)."""
     if day_of_week in (5, 6):
         return 0.88
     if day_of_week == 4:
@@ -43,10 +49,6 @@ def weekend_factor(day_of_week: int) -> float:
 
 
 def temperature_effect(temp_celsius: float) -> float:
-    """
-    Вплив температури. Оптимум +18°C.
-    Холодніше → опалення; тепліше → кондиціонування.
-    """
     deviation = temp_celsius - 18.0
     if deviation < 0:
         return 1.0 + abs(deviation) * 0.018
@@ -54,12 +56,10 @@ def temperature_effect(temp_celsius: float) -> float:
 
 
 def cloud_effect(cloud_cover_pct: float) -> float:
-    """Вплив хмарності (більше хмар → більше освітлення)."""
     return 1.0 + (cloud_cover_pct / 100.0) * 0.02
 
 
 def wind_effect(wind_speed_ms: float) -> float:
-    """Невеликий вплив вітру."""
     return 1.0 - min(wind_speed_ms / 100.0, 0.05)
 
 
@@ -74,8 +74,9 @@ def anfis_predict(
     is_pre_holiday: bool = False,
     is_school_break: bool = False,
 ) -> dict:
-    """Прогноз на одну годину."""
-    base = get_base_load(hour)
+    """Прогноз на одну годину з використанням реальної базової кривої."""
+    curve = get_base_load_curve()
+    base = curve[hour % 24]
 
     value = (
         base
@@ -93,11 +94,9 @@ def anfis_predict(
     if is_school_break:
         value *= 0.94
 
-    # Детерміноване відхилення для реалізму
     noise_seed = (hour * 7 + month * 31 + day_of_week * 13) % 100
     noise = (noise_seed / 100.0 - 0.5) * 0.15
     value += noise
-
     value = round(max(8.0, min(22.0, value)), 3)
     ci_half = round(value * 0.04, 3)
 
@@ -120,7 +119,7 @@ def generate_forecast_series(
 
     for i in range(hours):
         ts = start + datetime.timedelta(hours=i)
-        ci_multiplier = 1.0 + (i // 6) * 0.01  # CI розширюється з часом
+        ci_multiplier = 1.0 + (i // 6) * 0.01
 
         pred = anfis_predict(
             hour=ts.hour,
@@ -148,22 +147,13 @@ def generate_forecast_series(
 
 
 def compute_metrics(actuals: list[float], predictions: list[float]) -> dict:
-    """Розрахунок метрик якості прогнозу."""
     if not actuals or len(actuals) != len(predictions):
         return {"mape": None, "rmse": None, "mae": None}
-
     a = np.array(actuals)
     p = np.array(predictions)
-
-    # MAPE (Mean Absolute Percentage Error)
     mape = float(np.mean(np.abs((a - p) / a)) * 100)
-
-    # RMSE (Root Mean Squared Error) у МВт
     rmse = float(np.sqrt(np.mean((a - p) ** 2)) * 1000)
-
-    # MAE (Mean Absolute Error) у МВт
     mae = float(np.mean(np.abs(a - p)) * 1000)
-
     return {
         "mape": round(mape, 2),
         "rmse": round(rmse, 0),
