@@ -452,6 +452,20 @@ function UsersTab() {
 
   return (
     <div className="space-y-4">
+      {/* Банер демо-режиму */}
+      <div className="rounded-lg border border-amber-200 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-900/20 p-3">
+        <div className="flex items-start gap-2.5">
+          <I.AlertTriangle size={16} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex-1 text-sm">
+            <div className="font-medium text-amber-900 dark:text-amber-200">Демо-режим управління користувачами</div>
+            <p className="text-xs text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+              Список користувачів є демонстраційним. Реальна авторизація з JWT-токенами та паролями
+              винесена за межі дипломного проекту і впроваджуватиметься на етапі промислового впровадження.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <Card>
         {/* Заголовок + кнопка */}
         <div className="px-5 pt-5 pb-3 flex items-center justify-between gap-3 flex-wrap">
