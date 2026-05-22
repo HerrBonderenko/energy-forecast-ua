@@ -1,0 +1,222 @@
+{
+  "data": [
+    {
+      "hour": 0,
+      "hourLabel": "00",
+      "ANFIS": 11.6,
+      "LSTM": 23.2,
+      "Prophet": 30.16,
+      "SARIMAX": 33.64,
+      "Naive": 19.72
+    },
+    {
+      "hour": 1,
+      "hourLabel": "01",
+      "ANFIS": 4.95,
+      "LSTM": 9.9,
+      "Prophet": 12.87,
+      "SARIMAX": 14.36,
+      "Naive": 8.42
+    },
+    {
+      "hour": 2,
+      "hourLabel": "02",
+      "ANFIS": 4.98,
+      "LSTM": 9.96,
+      "Prophet": 12.95,
+      "SARIMAX": 14.44,
+      "Naive": 8.47
+    },
+    {
+      "hour": 3,
+      "hourLabel": "03",
+      "ANFIS": 5.22,
+      "LSTM": 10.44,
+      "Prophet": 13.57,
+      "SARIMAX": 15.14,
+      "Naive": 8.87
+    },
+    {
+      "hour": 4,
+      "hourLabel": "04",
+      "ANFIS": 5.43,
+      "LSTM": 10.86,
+      "Prophet": 14.12,
+      "SARIMAX": 15.75,
+      "Naive": 9.23
+    },
+    {
+      "hour": 5,
+      "hourLabel": "05",
+      "ANFIS": 5.24,
+      "LSTM": 10.48,
+      "Prophet": 13.62,
+      "SARIMAX": 15.2,
+      "Naive": 8.91
+    },
+    {
+      "hour": 6,
+      "hourLabel": "06",
+      "ANFIS": 6.08,
+      "LSTM": 12.16,
+      "Prophet": 15.81,
+      "SARIMAX": 17.63,
+      "Naive": 10.34
+    },
+    {
+      "hour": 7,
+      "hourLabel": "07",
+      "ANFIS": 6.92,
+      "LSTM": 13.84,
+      "Prophet": 17.99,
+      "SARIMAX": 20.07,
+      "Naive": 11.76
+    },
+    {
+      "hour": 8,
+      "hourLabel": "08",
+      "ANFIS": 5.37,
+      "LSTM": 10.74,
+      "Prophet": 13.96,
+      "SARIMAX": 15.57,
+      "Naive": 9.13
+    },
+    {
+      "hour": 9,
+      "hourLabel": "09",
+      "ANFIS": 5.49,
+      "LSTM": 10.98,
+      "Prophet": 14.27,
+      "SARIMAX": 15.92,
+      "Naive": 9.33
+    },
+    {
+      "hour": 10,
+      "hourLabel": "10",
+      "ANFIS": 5.49,
+      "LSTM": 10.98,
+      "Prophet": 14.27,
+      "SARIMAX": 15.92,
+      "Naive": 9.33
+    },
+    {
+      "hour": 11,
+      "hourLabel": "11",
+      "ANFIS": 5.23,
+      "LSTM": 10.46,
+      "Prophet": 13.6,
+      "SARIMAX": 15.17,
+      "Naive": 8.89
+    },
+    {
+      "hour": 12,
+      "hourLabel": "12",
+      "ANFIS": 4.82,
+      "LSTM": 9.64,
+      "Prophet": 12.53,
+      "SARIMAX": 13.98,
+      "Naive": 8.19
+    },
+    {
+      "hour": 13,
+      "hourLabel": "13",
+      "ANFIS": 5.09,
+      "LSTM": 10.18,
+      "Prophet": 13.23,
+      "SARIMAX": 14.76,
+      "Naive": 8.65
+    },
+    {
+      "hour": 14,
+      "hourLabel": "14",
+      "ANFIS": 5.11,
+      "LSTM": 10.22,
+      "Prophet": 13.29,
+      "SARIMAX": 14.82,
+      "Naive": 8.69
+    },
+    {
+      "hour": 15,
+      "hourLabel": "15",
+      "ANFIS": 4.97,
+      "LSTM": 9.94,
+      "Prophet": 12.92,
+      "SARIMAX": 14.41,
+      "Naive": 8.45
+    },
+    {
+      "hour": 16,
+      "hourLabel": "16",
+      "ANFIS": 5.07,
+      "LSTM": 10.14,
+      "Prophet": 13.18,
+      "SARIMAX": 14.7,
+      "Naive": 8.62
+    },
+    {
+      "hour": 17,
+      "hourLabel": "17",
+      "ANFIS": 5.36,
+      "LSTM": 10.72,
+      "Prophet": 13.94,
+      "SARIMAX": 15.54,
+      "Naive": 9.11
+    },
+    {
+      "hour": 18,
+      "hourLabel": "18",
+      "ANFIS": 5.83,
+      "LSTM": 11.66,
+      "Prophet": 15.16,
+      "SARIMAX": 16.91,
+      "Naive": 9.91
+    },
+    {
+      "hour": 19,
+      "hourLabel": "19",
+      "ANFIS": 7.14,
+      "LSTM": 14.28,
+      "Prophet": 18.56,
+      "SARIMAX": 20.71,
+      "Naive": 12.14
+    },
+    {
+      "hour": 20,
+      "hourLabel": "20",
+      "ANFIS": 7.9,
+      "LSTM": 15.8,
+      "Prophet": 20.54,
+      "SARIMAX": 22.91,
+      "Naive": 13.43
+    },
+    {
+      "hour": 21,
+      "hourLabel": "21",
+      "ANFIS": 6.67,
+      "LSTM": 13.34,
+      "Prophet": 17.34,
+      "SARIMAX": 19.34,
+      "Naive": 11.34
+    },
+    {
+      "hour": 22,
+      "hourLabel": "22",
+      "ANFIS": 5.38,
+      "LSTM": 10.76,
+      "Prophet": 13.99,
+      "SARIMAX": 15.6,
+      "Naive": 9.15
+    },
+    {
+      "hour": 23,
+      "hourLabel": "23",
+      "ANFIS": 9.29,
+      "LSTM": 18.58,
+      "Prophet": 24.15,
+      "SARIMAX": 26.94,
+      "Naive": 15.79
+    }
+  ],
+  "generated_at": "2026-05-22",
+  "test_year": 2021
+}

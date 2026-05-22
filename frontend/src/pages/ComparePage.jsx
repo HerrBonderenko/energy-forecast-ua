@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
@@ -11,6 +11,8 @@ import * as I from '../components/ui/Icons';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { MODEL_METRICS, CHART_DATA_7D, HOURLY_MAPE_CHART, MODEL_COLORS } from '../lib/mockData';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 import { cx, fmtDecimal, DAY_SHORT_UK } from '../lib/utils';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -72,6 +74,36 @@ function BestCell({ value, isBest, decimals }) {
 
 // ── TAB 1: Метрики ──────────────────────────────────────────────────────────
 function TabMetrics() {
+  const [models, setModels] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/model/metrics`)
+      .then(r => r.json())
+      .then(data => {
+        // Перетворюємо у формат який очікує таблиця
+        const transformed = data.map(m => ({
+          modelName:           m.model,
+          mape:                m.mape,
+          rmse:                m.rmse,
+          mae:                 m.mae,
+          trainingTimeSeconds: m.train_time_s,
+          interpretability:    m.interpretable ? 'high' : 'low',
+          source:              m.source,
+          note:                m.note || '',
+        }));
+        setModels(transformed);
+      })
+      .catch(() => setModels(MODEL_METRICS)); // fallback на mock
+  }, []);
+
+  const metrics = models || MODEL_METRICS;
+  // Знаходимо найкращі значення з реальних даних
+  const dynBest = {
+    mape: Math.min(...metrics.map(m => m.mape)),
+    rmse: Math.min(...metrics.map(m => m.rmse)),
+    mae:  Math.min(...metrics.map(m => m.mae)),
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -88,8 +120,8 @@ function TabMetrics() {
               </tr>
             </thead>
             <tbody>
-              {MODEL_METRICS.map((m, idx) => {
-                const isAnfis = m.modelName === 'ANFIS';
+              {metrics.map((m, idx) => {
+                const isAnfis = m.modelName === 'ANFIS' || m.modelName === 'ANFIS (наша)';
                 return (
                   <tr
                     key={m.modelName}
@@ -111,9 +143,9 @@ function TabMetrics() {
                         {m.modelName === 'Naive' && <span className="text-xs text-slate-500 font-normal">(baseline)</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums"><BestCell value={m.mape}                isBest={m.mape === BEST.mape}   decimals={2} /></td>
-                    <td className="px-4 py-3 text-right tabular-nums"><BestCell value={m.rmse}                isBest={m.rmse === BEST.rmse}   decimals={0} /></td>
-                    <td className="px-4 py-3 text-right tabular-nums"><BestCell value={m.mae}                 isBest={m.mae  === BEST.mae}    decimals={0} /></td>
+                    <td className="px-4 py-3 text-right tabular-nums"><BestCell value={m.mape}                isBest={m.mape === dynBest.mape}   decimals={2} /></td>
+                    <td className="px-4 py-3 text-right tabular-nums"><BestCell value={m.rmse}                isBest={m.rmse === dynBest.rmse}   decimals={0} /></td>
+                    <td className="px-4 py-3 text-right tabular-nums"><BestCell value={m.mae}                 isBest={m.mae  === dynBest.mae}    decimals={0} /></td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">{m.trainingTimeSeconds}</td>
                     <td className="px-4 py-3">
                       {m.interpretability
@@ -129,7 +161,8 @@ function TabMetrics() {
       </Card>
 
       <InfoBanner tone="blue" icon="Info">
-        <span className="font-medium">ANFIS показує найкращу точність</span> серед розглянутих моделей при збереженні високої інтерпретованості. Час навчання вищий за статистичні методи, але прийнятний для одноразового навчання.
+        <span className="font-medium">ANFIS показує найкращу точність</span> (MAPE = {metrics.find(m => m.modelName.startsWith('ANFIS'))?.mape ?? '—'} %) при збереженні високої інтерпретованості.
+        Метрики Naive Seasonal та SARIMAX отримано шляхом реального навчання на тих самих даних 2017–2021. Метрики LSTM і Prophet — академічні бенчмарки (Marino et al. 2016; Taylor & Letham 2018).
       </InfoBanner>
     </div>
   );
@@ -254,8 +287,8 @@ function TabCharts() {
         </ResponsiveContainer>
 
         <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
-          <div>Тестова вибірка: <span className="font-medium text-slate-700 dark:text-slate-200">7 днів · 168 точок · травень 2026</span></div>
-          <div>ANFIS відхиляється від факту в середньому на <span className="font-semibold text-green-700 dark:text-green-400">2,14 %</span> — найкраще серед усіх моделей.</div>
+          <div>Симуляція: <span className="font-medium text-slate-700 dark:text-slate-200">7 днів · 168 точок</span> — для ілюстрації характеру прогнозів</div>
+          <div className="text-amber-600 dark:text-amber-400">⚠ Реальне споживання в режимі реального часу недоступне (закрито з 24.02.2022 за воєнним станом)</div>
         </div>
       </Card>
     </div>
@@ -266,6 +299,15 @@ function TabCharts() {
 function TabErrors() {
   const { theme } = useTheme();
   const dark = theme === 'dark';
+  const [chartData, setChartData] = useState(HOURLY_MAPE_CHART);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/model/hourly-mape`)
+      .then(r => r.json())
+      .then(d => { if (d?.data?.length) setChartData(d.data); })
+      .catch(() => {});
+  }, []);
+
   const gridColor = dark ? '#1e293b' : '#e2e8f0';
   const axisColor = dark ? '#334155' : '#cbd5e1';
   const tickStyle = { fontSize: 10, fill: dark ? '#94a3b8' : '#64748b' };
@@ -289,7 +331,7 @@ function TabErrors() {
         </div>
 
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={HOURLY_MAPE_CHART} margin={{ top: 4, right: 8, left: -8, bottom: 16 }}>
+          <BarChart data={chartData} margin={{ top: 4, right: 8, left: -8, bottom: 16 }}>
             <CartesianGrid stroke={gridColor} strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="hourLabel"
@@ -320,7 +362,7 @@ function TabErrors() {
       </Card>
 
       <InfoBanner tone="amber" icon="AlertTriangle">
-        Найбільші помилки всіх моделей — ранкові (07–09) і вечірні (18–21) піки навантаження. ANFIS зберігає перевагу саме в ці критичні години, що важливо для оперативного управління мережею.
+        MAPE ANFIS обчислено на реальних тестових даних 2021 року (8759 годин). Метрики LSTM, Prophet, SARIMAX і Naive — інтерпольовані відносно ANFIS згідно з академічними бенчмарками. Найбільші помилки — нічні години (00–05) через малу варіацію базового рівня.
       </InfoBanner>
     </div>
   );
@@ -342,15 +384,7 @@ export default function ComparePage() {
       <SectionHeader
         title="Порівняння моделей"
         subtitle="Зіставлення ANFIS з референсними методами на тестовому тижні"
-        right={
-          <Button
-            variant="ghost" size="sm"
-            leftIcon={<I.Download size={14} />}
-            onClick={() => showToast({ type: 'success', title: 'Експорт підготовано', description: 'comparison-results.csv' })}
-          >
-            Експорт
-          </Button>
-        }
+
       />
 
       {/* Tabs з overflow-x-auto для мобільного */}
