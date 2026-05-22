@@ -24,6 +24,7 @@ def init_db():
     """Створює таблиці якщо їх немає."""
     conn = get_conn()
     try:
+        # Таблиця прогнозів
         conn.execute("""
             CREATE TABLE IF NOT EXISTS forecasts (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,6 +46,21 @@ def init_db():
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_forecasts_created ON forecasts(created_at DESC)")
+
+        # Таблиця сценаріїв
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS scenarios (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT NOT NULL,
+                description TEXT,
+                created_at  TEXT NOT NULL,
+                delta_pct   REAL,
+                direction   TEXT,
+                curve_json  TEXT,
+                deltas_json TEXT
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_scenarios_created ON scenarios(created_at DESC)")
         conn.commit()
         print(f"✅ SQLite ініціалізована: {DB_PATH}")
     finally:
@@ -172,3 +188,110 @@ def get_stats() -> dict:
         }
     finally:
         conn.close()
+
+
+# ─── Сценарії ─────────────────────────────────────────────────────────────────
+
+def save_scenario(
+    name: str,
+    description: Optional[str],
+    delta_pct: float,
+    direction: str,
+    curve: list,
+    deltas: dict,
+    created_at: Optional[str] = None,
+) -> int:
+    """Зберігає сценарій."""
+    now_iso = created_at or (datetime.datetime.utcnow().isoformat() + "Z")
+    conn = get_conn()
+    try:
+        cursor = conn.execute("""
+            INSERT INTO scenarios (
+                name, description, created_at,
+                delta_pct, direction, curve_json, deltas_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            name, description, now_iso,
+            delta_pct, direction,
+            json.dumps(curve, ensure_ascii=False),
+            json.dumps(deltas, ensure_ascii=False),
+        ))
+        conn.commit()
+        return cursor.lastrowid
+    finally:
+        conn.close()
+
+
+def get_scenarios() -> list:
+    """Повертає всі сценарії."""
+    conn = get_conn()
+    try:
+        cursor = conn.execute("""
+            SELECT id, name, description, created_at,
+                   delta_pct, direction, curve_json, deltas_json
+            FROM scenarios
+            ORDER BY created_at DESC
+        """)
+        result = []
+        for row in cursor.fetchall():
+            r = dict(row)
+            r["curve"]  = json.loads(r.pop("curve_json")  or "[]")
+            r["deltas"] = json.loads(r.pop("deltas_json") or "{}")
+            # Перейменовуємо для сумісності з фронтендом
+            r["deltaPct"]  = r.pop("delta_pct")
+            r["createdAt"] = r.pop("created_at")
+            r["id"]        = str(r["id"])  # фронт очікує string id
+            result.append(r)
+        return result
+    finally:
+        conn.close()
+
+
+def get_scenario_by_id(scenario_id: int) -> Optional[dict]:
+    """Повертає сценарій за ID."""
+    conn = get_conn()
+    try:
+        cursor = conn.execute("""
+            SELECT id, name, description, created_at,
+                   delta_pct, direction, curve_json, deltas_json
+            FROM scenarios WHERE id = ?
+        """, (scenario_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        r = dict(row)
+        r["curve"]     = json.loads(r.pop("curve_json")  or "[]")
+        r["deltas"]    = json.loads(r.pop("deltas_json") or "{}")
+        r["deltaPct"]  = r.pop("delta_pct")
+        r["createdAt"] = r.pop("created_at")
+        r["id"]        = str(r["id"])
+        return r
+    finally:
+        conn.close()
+
+
+def delete_scenario(scenario_id: int) -> bool:
+    """Видаляє сценарій."""
+    conn = get_conn()
+    try:
+        cursor = conn.execute("DELETE FROM scenarios WHERE id = ?", (scenario_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def duplicate_scenario(scenario_id: int) -> Optional[dict]:
+    """Дублює сценарій з суфіксом '(копія)'."""
+    src = get_scenario_by_id(scenario_id)
+    if not src:
+        return None
+    new_id = save_scenario(
+        name=f"{src['name']} (копія)",
+        description=src.get("description"),
+        delta_pct=src["deltaPct"],
+        direction=src["direction"],
+        curve=src["curve"],
+        deltas=src["deltas"],
+    )
+    return get_scenario_by_id(new_id)

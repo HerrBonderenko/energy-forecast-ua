@@ -5,7 +5,7 @@ import os
 
 load_dotenv()
 
-from app.routers import forecast, weather, history, model_info
+from app.routers import forecast, weather, history, model_info, scenarios
 from app.services.db import init_db
 
 app = FastAPI(
@@ -26,18 +26,17 @@ app.include_router(forecast.router,   prefix="/api/forecast",  tags=["Прогн
 app.include_router(weather.router,    prefix="/api/weather",   tags=["Погода"])
 app.include_router(history.router,    prefix="/api/history",   tags=["Історія"])
 app.include_router(model_info.router, prefix="/api/model",     tags=["Модель"])
+app.include_router(scenarios.router,  prefix="/api/scenarios", tags=["Сценарії"])
 
 
 @app.on_event("startup")
 async def startup_event():
     """При старті ініціалізуємо SQLite БД і завантажуємо модель."""
-    # 1. Ініціалізація SQLite для збереження прогнозів
     try:
         init_db()
     except Exception as e:
         print(f"⚠ Помилка ініціалізації БД: {e}")
 
-    # 2. Перевірка моделі ANFIS
     try:
         from app.models.anfis import _load_model, get_model_info
         model = _load_model()
