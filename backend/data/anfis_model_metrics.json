@@ -1,13 +1,13 @@
 {
-  "version": "v3.0.0",
+  "version": "v3.1.0",
   "training_date": "2026-05-22",
-  "training_duration_seconds": 26,
-  "rules_count": 50,
-  "input_variables": 6,
+  "training_duration_seconds": 34,
+  "rules_count": 55,
+  "input_variables": 7,
   "membership_functions_count": 26,
   "metrics": {
-    "mape": 6.339,
-    "rmse": 1355.1,
-    "mae": 1075.1
+    "mape": 6.166,
+    "rmse": 1344.0,
+    "mae": 1039.8
   }
 }

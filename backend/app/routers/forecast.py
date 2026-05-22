@@ -4,6 +4,7 @@ from typing import Optional, List
 import datetime
 
 from app.models.anfis import generate_forecast_series, get_base_load, get_model_info
+from app.services.db import save_forecast
 
 router = APIRouter()
 
@@ -125,16 +126,36 @@ async def create_forecast(req: ForecastRequest):
 
         model_info = get_model_info()
 
+        summary_out = {
+            "avg":      round(avg_v, 3),
+            "max":      round(max_v, 3),
+            "min":      round(min_v, 3),
+            "max_hour": values.index(max_v),
+            "min_hour": values.index(min_v),
+        }
+
+        # Зберігаємо прогноз у БД
+        try:
+            forecast_id = save_forecast(
+                start_time=req.start,
+                hours=req.hours,
+                model_version=model_info["version"],
+                model_mape=model_info["metrics"]["mape"],
+                weather_source=weather_source_used,
+                weather=req.weather.model_dump(),
+                calendar=req.calendar.model_dump(),
+                points=points,
+                summary=summary_out,
+            )
+        except Exception as e:
+            print(f"⚠ Не вдалося зберегти прогноз: {e}")
+            forecast_id = None
+
         return {
+            "id":            forecast_id,
             "request":       req.model_dump(exclude={"hourly_weather"}),
             "points":        points,
-            "summary": {
-                "avg":      round(avg_v, 3),
-                "max":      round(max_v, 3),
-                "min":      round(min_v, 3),
-                "max_hour": values.index(max_v),
-                "min_hour": values.index(min_v),
-            },
+            "summary":       summary_out,
             "model_version": model_info["version"],
             "model_mape":    model_info["metrics"]["mape"],
             "weather_source": weather_source_used,

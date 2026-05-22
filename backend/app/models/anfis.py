@@ -99,12 +99,18 @@ _DEFAULT_CLOUD_MFS = {
     "похмуро": (65,100,100),
 }
 _DEFAULT_DAY_MFS = {
-    "робочий":  (0.4,1.0,1.1),
-    "вихідний": (-0.1,0.0,0.6),
+    "робочий":  (-0.1, 0.0, 0.6),  # is_weekend=0
+    "вихідний": (0.4,  1.0, 1.1),  # is_weekend=1
 }
 _DEFAULT_HOLIDAY_MFS = {
-    "так": (0.4,1.0,1.1),
-    "ні":  (-0.1,0.0,0.6),
+    "так": (0.4,  1.0, 1.1),  # is_holiday=1
+    "ні":  (-0.1, 0.0, 0.6),  # is_holiday=0
+}
+
+_DEFAULT_WIND_MFS = {
+    "тихий":    (0, 0, 5),
+    "помірний": (3, 8, 15),
+    "сильний":  (12, 20, 40),
 }
 
 def _get_mfs():
@@ -114,10 +120,16 @@ def _get_mfs():
         mfs = model["membership_functions"]
         return {
             "temperature": mfs.get("temperature", _DEFAULT_TEMP_MFS),
-            "hour":        mfs.get("hour", _DEFAULT_HOUR_MFS),
+            "hour":        mfs.get("hour",        _DEFAULT_HOUR_MFS),
             "cloud_cover": mfs.get("cloud_cover", _DEFAULT_CLOUD_MFS),
+            "wind_speed":  mfs.get("wind_speed",  _DEFAULT_WIND_MFS),
         }
-    return {"temperature": _DEFAULT_TEMP_MFS, "hour": _DEFAULT_HOUR_MFS, "cloud_cover": _DEFAULT_CLOUD_MFS}
+    return {
+        "temperature": _DEFAULT_TEMP_MFS,
+        "hour":        _DEFAULT_HOUR_MFS,
+        "cloud_cover": _DEFAULT_CLOUD_MFS,
+        "wind_speed":  _DEFAULT_WIND_MFS,
+    }
 
 def _membership(var_name, label, value, mfs):
     if var_name == "season":
@@ -172,13 +184,37 @@ def anfis_predict(
     is_weekend  = 1.0 if day_of_week >= 5 else 0.0
     holiday_val = 1.0 if is_holiday else 0.0
 
+    # Wind chill: відчутна температура знижується при вітрі
+    # Формула Siple-Passel (спрощена): ΔT ≈ -0.7 * wind_speed при T<10°C
+    temp = float(temperature)
+    wind = float(wind_speed)
+    cloud = float(cloud_cover)
+
+    if temp < 10.0 and wind > 3.0:
+        # Холодний wind chill: вітер робить холодніше
+        wind_chill = 0.55 * (1 - wind / 30.0) * (temp - 10.0)
+        effective_temp = temp + wind_chill  # зменшує температуру
+    elif temp > 20.0 and wind > 3.0:
+        # Спекотний: вітер трохи охолоджує
+        effective_temp = temp - wind * 0.06
+    else:
+        effective_temp = temp
+
+    # Хмарність: вночі і взимку хмарність підвищує споживання (менше нічного охолодження)
+    # Вдень влітку хмарність знижує (менше сонця → менше кондиціонерів)
+    cloud_correction = 0.0
+    if 22 <= hour or hour <= 5:  # ніч
+        cloud_correction = (cloud - 50.0) * 0.003  # +0.15 ГВт при 100% хмарності
+    elif 10 <= hour <= 16 and temp > 20.0:  # спекотний день
+        cloud_correction = -(cloud - 50.0) * 0.002  # -0.1 ГВт при 100% хмарності
+
     feats = {
-        "temperature": float(temperature),
+        "temperature": effective_temp,   # ефективна температура з wind chill
         "hour":        float(hour),
         "is_weekend":  is_weekend,
         "month":       float(month),
-        "cloud_cover": float(cloud_cover),
-        "wind_speed":  float(wind_speed),
+        "cloud_cover": cloud,
+        "wind_speed":  wind,
         "is_holiday":  holiday_val,
     }
 
@@ -188,14 +224,12 @@ def anfis_predict(
         base_mean   = model.get("base_load_mean", 16.774)
         intercept   = model.get("intercept", -2.171)
         weights     = _compute_weights(feats)
-        # Підганяємо розмір якщо правил менше
         if len(weights) > len(consq):
             weights = weights[:len(consq)]
         elif len(weights) < len(consq):
             consq = consq[:len(weights)]
-        prediction  = base_mean + intercept + float(np.dot(weights, consq))
+        prediction  = base_mean + intercept + float(np.dot(weights, consq)) + cloud_correction
     else:
-        # Fallback аналітична формула
         base = BASE_LOAD_FALLBACK[hour]
         sm   = {12:1.15,1:1.15,2:1.1,3:1.0,4:0.95,5:0.9,6:0.88,7:0.87,8:0.88,9:0.93,10:0.98,11:1.05}
         tf   = 1.0 + max(0,(5-temperature)*0.018) - max(0,(temperature-25)*0.01)
