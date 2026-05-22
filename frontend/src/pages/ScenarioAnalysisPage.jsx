@@ -266,8 +266,6 @@ export default function ScenarioAnalysisPage() {
   const [dWind,  setDWind]  = useState(0);
   const [isWeekend,    setIsWeekend]    = useState(false);
   const [isHoliday,    setIsHoliday]    = useState(false);
-  const [isPreHoliday, setIsPreHoliday] = useState(false);
-  const [isSchoolBreak, setIsSchoolBreak] = useState(false);
   const [mfCount, setMfCount] = useState('5');
   const [mfType,  setMfType]  = useState('gaussian');
   const [saveOpen, setSaveOpen] = useState(false);
@@ -277,7 +275,7 @@ export default function ScenarioAnalysisPage() {
   const [computed, setComputed] = useState(null);
   useEffect(() => {
     const t = setTimeout(() => {
-      const { curve, pct } = applyWhatIf(BASELINE_CURVE, { dTemp, dCloud, dWind, isWeekend, isHoliday, isPreHoliday, isSchoolBreak });
+      const { curve, pct } = applyWhatIf(BASELINE_CURVE, { dTemp, dCloud, dWind, isWeekend, isHoliday });
       const baselineAvg = BASELINE_CURVE.reduce((a, b) => a + b, 0) / 24;
       setComputed({
         curve, pct,
@@ -288,7 +286,7 @@ export default function ScenarioAnalysisPage() {
       });
     }, 100);
     return () => clearTimeout(t);
-  }, [dTemp, dCloud, dWind, isWeekend, isHoliday, isPreHoliday, isSchoolBreak]);
+  }, [dTemp, dCloud, dWind, isWeekend, isHoliday]);
 
   function reset() {
     setDTemp(0); setDCloud(0); setDWind(0);
@@ -301,8 +299,6 @@ export default function ScenarioAnalysisPage() {
     setDWind(s.deltas?.dWind || 0);
     setIsWeekend(!!s.deltas?.isWeekend);
     setIsHoliday(!!s.deltas?.isHoliday);
-    setIsPreHoliday(!!s.deltas?.isPreHoliday);
-    setIsSchoolBreak(!!s.deltas?.isSchoolBreak);
     setLoadOpen(false);
     showToast({ type: 'info', title: 'Сценарій завантажено', description: `«${s.name}»` });
   }
@@ -325,7 +321,7 @@ export default function ScenarioAnalysisPage() {
       deltaPct: +(computed?.pct || 0).toFixed(2),
       direction: dir,
       curve: computed ? [...computed.curve] : [...BASELINE_CURVE],
-      deltas: { dTemp, dCloud, dWind, isWeekend, isHoliday, isPreHoliday, isSchoolBreak },
+      deltas: { dTemp, dCloud, dWind, isWeekend, isHoliday },
     });
     showToast({ type: 'success', title: 'Сценарій збережено', description: `«${name}»` });
     setSaveOpen(false);
@@ -380,8 +376,6 @@ export default function ScenarioAnalysisPage() {
                 <Switch checked={isWeekend} onChange={setIsWeekend} />
               </div>
               <Checkbox checked={isHoliday}    onChange={setIsHoliday}    label="Святковий день" />
-              <Checkbox checked={isPreHoliday} onChange={setIsPreHoliday} label="Передсвятковий день" />
-              <Checkbox checked={isSchoolBreak} onChange={setIsSchoolBreak} label="Шкільні канікули" />
             </div>
           </Card>
 
