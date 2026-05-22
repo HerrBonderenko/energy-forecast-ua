@@ -25,17 +25,6 @@ function fmtPct(v, d = 1) { return `${fmtDecimal(v, d)}${NBSP}%`; }
 
 const SENSITIVITY_COLORS = ['#1E40AF', '#2563EB', '#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE'];
 
-const MF_COUNT_OPTIONS = [
-  { value: '3', label: '3' },
-  { value: '5', label: '5' },
-  { value: '7', label: '7' },
-];
-const MF_TYPE_OPTIONS = [
-  { value: 'gaussian',   label: 'Гаусівська' },
-  { value: 'triangular', label: 'Трикутна' },
-  { value: 'bell',       label: 'Дзвіноподібна' },
-];
-
 // ── Change slider ─────────────────────────────────────────────────────────────
 function ChangeSlider({ label, unit, value, onChange, min, max, step, decimals = 0 }) {
   return (
@@ -266,8 +255,6 @@ export default function ScenarioAnalysisPage() {
   const [dWind,  setDWind]  = useState(0);
   const [isWeekend,    setIsWeekend]    = useState(false);
   const [isHoliday,    setIsHoliday]    = useState(false);
-  const [mfCount, setMfCount] = useState('5');
-  const [mfType,  setMfType]  = useState('gaussian');
   const [saveOpen, setSaveOpen] = useState(false);
   const [loadOpen, setLoadOpen] = useState(false);
 
@@ -373,21 +360,6 @@ export default function ScenarioAnalysisPage() {
             <div className="flex flex-col gap-2.5">
               <Checkbox checked={isWeekend} onChange={setIsWeekend} label="Вихідний день" />
               <Checkbox checked={isHoliday} onChange={setIsHoliday} label="Державне свято" />
-            </div>
-          </Card>
-
-          {/* Параметри моделі */}
-          <Card padding="p-4">
-            <CardTitle className="text-sm mb-3">Параметри моделі</CardTitle>
-            <div className="space-y-3">
-              <div>
-                <Label className="block text-xs mb-1.5">Функцій належності</Label>
-                <Select value={mfCount} onChange={(v) => setMfCount(v)} options={MF_COUNT_OPTIONS} />
-              </div>
-              <div>
-                <Label className="block text-xs mb-1.5">Тип функції</Label>
-                <Select value={mfType} onChange={(v) => setMfType(v)} options={MF_TYPE_OPTIONS} />
-              </div>
             </div>
           </Card>
 
