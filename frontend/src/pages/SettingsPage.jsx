@@ -13,6 +13,8 @@ import {
 import { cx } from '../lib/utils';
 import { getModelInfo } from '../lib/api';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function sourceTone(status) {
   if (status === 'connected') return 'green';
@@ -234,20 +236,55 @@ function ModelTab() {
   };
   const fmt = (n) => (n != null ? String(n).replace('.', ',') : '—');
 
-  function startRetrain() {
+  const [retrainMsg, setRetrainMsg] = useState('');
+
+  async function startRetrain() {
     setConfirmOpen(false);
     setRetraining({ inProgress: true, progress: 0 });
-    let p = 0;
-    const iv = setInterval(() => {
-      p += 2 + Math.random() * 3;
-      if (p >= 100) {
-        clearInterval(iv);
-        setRetraining({ inProgress: false, progress: 100 });
-        showToast({ type: 'success', title: 'Перетренування завершено', description: 'Нова модель v1.2.4 активована' });
-      } else {
-        setRetraining({ inProgress: true, progress: p });
+    setRetrainMsg('Запит до сервера...');
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/model/retrain`, { method: 'POST' });
+      const data = await resp.json();
+      if (!data.started && !data.state?.in_progress) {
+        showToast({ type: 'error', title: 'Не вдалося запустити навчання', description: data.message });
+        setRetraining({ inProgress: false, progress: 0 });
+        return;
       }
-    }, 400);
+
+      // Polling статусу кожні 2 секунди
+      const pollInterval = setInterval(async () => {
+        try {
+          const sresp = await fetch(`${API_BASE}/api/model/retrain/status`);
+          const state = await sresp.json();
+          setRetraining({ inProgress: state.in_progress, progress: state.progress || 0 });
+          setRetrainMsg(state.message || '');
+
+          if (!state.in_progress) {
+            clearInterval(pollInterval);
+            if (state.error) {
+              showToast({ type: 'error', title: 'Помилка навчання', description: state.error });
+            } else if (state.result) {
+              showToast({
+                type: 'success',
+                title: 'Перетренування завершено',
+                description: `${state.result.version} — MAPE ${state.result.metrics.mape}%`,
+              });
+              // Оновлюємо інформацію про модель
+              getModelInfo().then(setModelInfo).catch(() => {});
+            }
+            setRetraining({ inProgress: false, progress: 100 });
+          }
+        } catch (err) {
+          clearInterval(pollInterval);
+          showToast({ type: 'error', title: 'Помилка опитування статусу' });
+          setRetraining({ inProgress: false, progress: 0 });
+        }
+      }, 2000);
+    } catch (err) {
+      showToast({ type: 'error', title: 'Помилка запиту', description: err.message });
+      setRetraining({ inProgress: false, progress: 0 });
+    }
   }
 
   return (
@@ -304,7 +341,7 @@ function ModelTab() {
         </div>
         <CardBody>
           <InfoBanner tone="amber" icon="AlertTriangle">
-            Перетренування може зайняти до 15 хвилин. У цей час модель буде недоступна.
+            Перетренування займає 30–60 секунд. Модель залишається доступною — нова версія активується після завершення.
           </InfoBanner>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button
@@ -316,11 +353,14 @@ function ModelTab() {
               {retraining.inProgress ? 'Триває навчання…' : 'Запустити перетренування'}
             </Button>
             {retraining.inProgress && (
-              <div className="flex-1 min-w-[160px] flex items-center gap-2">
-                <ProgressBar value={retraining.progress} max={100} tone="blue" className="flex-1" />
-                <span className="text-xs tabular-nums text-slate-500 min-w-[3rem] text-right">
-                  {Math.round(retraining.progress)} %
-                </span>
+              <div className="flex-1 min-w-[200px] space-y-1">
+                <div className="flex items-center gap-2">
+                  <ProgressBar value={retraining.progress} max={100} tone="blue" className="flex-1" />
+                  <span className="text-xs tabular-nums text-slate-500 min-w-[3rem] text-right">
+                    {Math.round(retraining.progress)} %
+                  </span>
+                </div>
+                {retrainMsg && <div className="text-xs text-slate-500 dark:text-slate-400">{retrainMsg}</div>}
               </div>
             )}
           </div>
