@@ -192,3 +192,119 @@ def top_rules(limit: int = 5):
         })
     items.sort(key=lambda x: x["weight"], reverse=True)
     return {"rules": items[:limit]}
+
+
+@router.get("/hourly-mape")
+def hourly_mape():
+    """MAPE моделей за годинами доби (ANFIS реальний з test 2021)."""
+    import json as _json
+    from pathlib import Path
+    path = Path(__file__).parent.parent.parent / "data" / "hourly_mape.json"
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            return _json.load(f)
+    return {"data": [], "test_year": None}
+
+
+from pydantic import BaseModel as _BM
+from fastapi import HTTPException as _HE
+
+
+class AnalyzeRequest(_BM):
+    date: str  # "2026-05-09"
+    time: str = "18:00"
+
+
+@router.post("/analyze")
+async def analyze_decision(req: AnalyzeRequest):
+    """Аналіз процесу прийняття рішення моделі для конкретного моменту."""
+    import datetime as dt_mod
+    import numpy as np
+    from app.models.anfis import _load_model, _compute_weights
+
+    model = _load_model()
+    if not model:
+        raise _HE(status_code=503, detail="Модель не завантажена")
+
+    # Парсимо дату
+    try:
+        hh, mm = req.time.split(":")
+        dt = dt_mod.datetime.fromisoformat(f"{req.date}T{hh.zfill(2)}:{mm.zfill(2)}:00")
+    except Exception:
+        raise _HE(status_code=400, detail="Невірний формат дати/часу")
+
+    # Погода
+    try:
+        from app.services.openmeteo_client import fetch_current_weather
+        w = await fetch_current_weather()
+    except Exception:
+        w = {"temperature": 10.0, "cloud_cover": 50.0, "wind_speed": 5.0}
+
+    # Календар
+    weekday = dt.weekday()
+    is_weekend = 1.0 if weekday >= 5 else 0.0
+    HOLIDAYS = {(1,1),(1,7),(3,8),(5,1),(5,2),(5,9),(6,28),(8,24),(10,14),(11,1),(12,25)}
+    is_holiday = 1.0 if (dt.month, dt.day) in HOLIDAYS else 0.0
+    season = "зима" if dt.month in (12,1,2) else "весна" if dt.month in (3,4,5) else "літо" if dt.month in (6,7,8) else "осінь"
+
+    feats = {
+        "temperature": float(w.get("temperature") or 10),
+        "hour":        float(dt.hour),
+        "is_weekend":  is_weekend,
+        "month":       float(dt.month),
+        "cloud_cover": float(w.get("cloud_cover") or 50),
+        "wind_speed":  float(w.get("wind_speed")  or 5),
+        "is_holiday":  is_holiday,
+    }
+
+    weights = _compute_weights(feats)
+    consequents = np.array(model["consequents"])
+    rules = model["rules"]
+    base = model.get("base_load_mean", 16.774)
+    intercept = model.get("intercept", -1.529)
+
+    # Внески кожного правила
+    contributions = weights * consequents
+    forecast = base + intercept + contributions.sum()
+
+    # Топ-5 за вагою
+    top_idx = np.argsort(weights)[::-1][:5]
+
+    names_7 = ["температура", "час", "день", "сезон", "хмарність", "вітер", "свято"]
+    top_rules = []
+    for idx in top_idx:
+        if weights[idx] <= 0:
+            continue
+        rule = rules[idx]
+        parts = [f"{names_7[j]}={label}" for j, label in enumerate(rule) if label and j < 7]
+        contrib_gw = float(contributions[idx])
+        # Зсунутий внесок (для відображення на графіку): від базової лінії
+        display_contrib = base / 5 + contrib_gw  # розподіляємо базу між топ-5
+        top_rules.append({
+            "id":           int(idx) + 1,
+            "condition":    " І ".join(parts),
+            "weight":       round(float(weights[idx]), 3),
+            "consequent":   round(float(consequents[idx]), 3),
+            "contribution_gw": round(display_contrib, 2),
+        })
+
+    weekday_name = ["Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота","Неділя"][weekday]
+    day_type = "Вихідний" if is_weekend else "Робочий"
+    if is_holiday:
+        day_type = "Свято"
+
+    return {
+        "context": {
+            "date":         dt.strftime("%d.%m.%Y"),
+            "time":         dt.strftime("%H:%M"),
+            "temperature":  round(feats["temperature"], 1),
+            "cloud_cover":  round(feats["cloud_cover"]),
+            "wind_speed":   round(feats["wind_speed"], 1),
+            "weekday":      weekday_name,
+            "day_type":     day_type,
+            "season":       season.capitalize(),
+        },
+        "forecast_gw": round(forecast, 2),
+        "active_rules": top_rules,
+        "model_version": model["version"],
+    }

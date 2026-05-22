@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   LineChart, Line, BarChart, Bar,
   PieChart, Pie, Cell,
@@ -12,30 +12,23 @@ import {
 import * as I from '../components/ui/Icons';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
-import {
-  MEMBERSHIP_FUNCTIONS, RULES, ACTIVE_CONTEXT, ACTIVE_RULES, PIE_COLORS,
-} from '../lib/mockData';
+import { MEMBERSHIP_FUNCTIONS, PIE_COLORS } from '../lib/mockData';
 import { cx, fmtDecimal } from '../lib/utils';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function fmt(v, d) {
   if (v == null) return '—';
   return fmtDecimal(v, d);
 }
 
-function ruleToString(r) {
-  return 'ЯКЩО ' + r.antecedents.join(' І ') + ', ТО споживання=' + r.consequent;
-}
-
-// ── TAB 1: Функції належності ────────────────────────────────────────────────
+// ── TAB 1: Функції належності (РЕАЛЬНІ — лише ті що в моделі) ────────────
 function MembershipCard({ mf }) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const gridColor = dark ? '#1e293b' : '#f1f5f9';
-  const axisColor = dark ? '#334155' : '#e2e8f0';
+  const gridColor = dark ? '#1e293b' : '#e2e8f0';
+  const axisColor = dark ? '#334155' : '#cbd5e1';
   const tickStyle = { fontSize: 10, fill: dark ? '#94a3b8' : '#64748b' };
-
-  const isBar = mf.mode === 'bar' || mf.mode === 'bar-categorical';
 
   return (
     <Card padding="p-4">
@@ -43,27 +36,19 @@ function MembershipCard({ mf }) {
         <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{mf.title}</h4>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{mf.subtitle}</p>
       </div>
-
       <ResponsiveContainer width="100%" height={170}>
-        {isBar ? (
+        {mf.type === 'bar' ? (
           <BarChart data={mf.data} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
             <CartesianGrid stroke={gridColor} strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey={mf.xKey} tickLine={false} axisLine={{ stroke: axisColor }} interval={0} tick={tickStyle} />
+            <XAxis dataKey={mf.xKey} tickLine={false} axisLine={{ stroke: axisColor }} tick={tickStyle} />
             <YAxis domain={[0, 1]} tickCount={3} tickLine={false} axisLine={false} tick={tickStyle} />
             <RTooltip
               contentStyle={{ background: dark ? '#1e293b' : '#fff', border: 'none', borderRadius: 6, fontSize: 11 }}
               formatter={(v, name) => [fmt(v, 2), name]}
-              cursor={{ fill: dark ? 'rgba(148,163,184,0.06)' : 'rgba(15,23,42,0.03)' }}
             />
-            {mf.mode === 'bar' ? (
-              mf.lines.map((l) => (
-                <Bar key={l.key} dataKey={l.key} fill={l.color} name={l.label} radius={[3, 3, 0, 0]} animationDuration={300} />
-              ))
-            ) : (
-              <Bar dataKey={mf.lines[0].key} name={mf.lines[0].label} radius={[3, 3, 0, 0]} animationDuration={300}>
-                {mf.data.map((d, i) => <Cell key={i} fill={d.color} />)}
-              </Bar>
-            )}
+            <Bar dataKey={mf.lines[0].key} name={mf.lines[0].label} radius={[3, 3, 0, 0]} animationDuration={300}>
+              {mf.data.map((d, i) => <Cell key={i} fill={d.color} />)}
+            </Bar>
           </BarChart>
         ) : (
           <LineChart data={mf.data} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
@@ -89,8 +74,6 @@ function MembershipCard({ mf }) {
           </LineChart>
         )}
       </ResponsiveContainer>
-
-      {/* Легенда під графіком */}
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
         {mf.lines.map((l) => (
           <span key={l.key} className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
@@ -103,15 +86,51 @@ function MembershipCard({ mf }) {
   );
 }
 
+// Які МФ показуємо — ТІЛЬКИ ТІ ЩО В МОДЕЛІ
+const ALLOWED_MF_IDS = ['temperature', 'hour', 'cloud', 'wind', 'season', 'weekday-simple', 'holiday-simple'];
+
+const SIMPLE_MFS = [
+  {
+    id: 'weekday-simple',
+    title: 'День тижня',
+    subtitle: 'Робочий vs вихідний',
+    type: 'bar',
+    xKey: 'name',
+    lines: [{ key: 'value', label: 'належність', color: '#60A5FA' }],
+    data: [
+      { name: 'Робочий (пн–пт)', value: 1.0, color: '#60A5FA' },
+      { name: 'Вихідний (сб–нд)', value: 1.0, color: '#FB923C' },
+    ],
+  },
+  {
+    id: 'holiday-simple',
+    title: 'Тип календарного дня',
+    subtitle: 'Звичайний vs свято',
+    type: 'bar',
+    xKey: 'name',
+    lines: [{ key: 'value', label: 'належність', color: '#34D399' }],
+    data: [
+      { name: 'Звичайний', value: 1.0, color: '#34D399' },
+      { name: 'Свято',     value: 1.0, color: '#F59E0B' },
+    ],
+  },
+];
+
 function TabMembership() {
+  // Фільтруємо MEMBERSHIP_FUNCTIONS — залишаємо тільки реальні в моделі
+  const realMfs = MEMBERSHIP_FUNCTIONS.filter(mf =>
+    ['temperature', 'hour', 'cloud', 'wind', 'season'].includes(mf.id)
+  );
+  const allMfs = [...realMfs, ...SIMPLE_MFS];
+
   return (
     <div className="space-y-4">
       <InfoBanner tone="blue" icon="Info">
-        Функції належності визначають, як числові вхідні значення перетворюються на нечіткі категорії. Перекриття кривих означає, що значення може одночасно належати до кількох категорій з різними ступенями.
+        Функції належності визначають, як числові вхідні значення перетворюються на нечіткі категорії.
+        Модель ANFIS v3.1.0 використовує <span className="font-semibold">7 вхідних змінних</span>: температура, час доби, день тижня (робочий/вихідний), сезон, хмарність, швидкість вітру, державне свято.
       </InfoBanner>
-      {/* Адаптивна сітка: 1 колонка → 2 → 3 */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {MEMBERSHIP_FUNCTIONS.map((mf) => (
+        {allMfs.map((mf) => (
           <MembershipCard key={mf.id} mf={mf} />
         ))}
       </div>
@@ -119,7 +138,7 @@ function TabMembership() {
   );
 }
 
-// ── TAB 2: Таблиця правил ───────────────────────────────────────────────────
+// ── TAB 2: Таблиця правил (РЕАЛЬНІ з API) ────────────────────────────────────
 function Highlight({ text, query }) {
   if (!query) return <>{text}</>;
   const i = text.toLowerCase().indexOf(query.toLowerCase());
@@ -127,24 +146,31 @@ function Highlight({ text, query }) {
   return (
     <>
       {text.slice(0, i)}
-      <mark className="bg-amber-200/70 dark:bg-amber-700/40 rounded-sm px-0.5">
-        {text.slice(i, i + query.length)}
-      </mark>
+      <mark className="bg-amber-200/70 dark:bg-amber-700/40 rounded-sm px-0.5">{text.slice(i, i + query.length)}</mark>
       {text.slice(i + query.length)}
     </>
   );
 }
 
 function TabRules() {
+  const [rules, setRules] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [page, setPage]   = useState(1);
   const PER_PAGE = 10;
 
+  useEffect(() => {
+    fetch(`${API_BASE}/api/model/rules`)
+      .then(r => r.json())
+      .then(d => { setRules(d.rules || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return RULES;
-    return RULES.filter((r) => ruleToString(r).toLowerCase().includes(q));
-  }, [query]);
+    if (!q) return rules;
+    return rules.filter((r) => (r.condition || '').toLowerCase().includes(q));
+  }, [query, rules]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const safePage   = Math.min(page, totalPages);
@@ -153,7 +179,6 @@ function TabRules() {
 
   return (
     <div className="space-y-3">
-      {/* Пошук + лічильник */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="w-full sm:w-72">
           <Input
@@ -164,14 +189,13 @@ function TabRules() {
           />
         </div>
         <div className="text-xs text-slate-500 dark:text-slate-400">
-          Правил: <span className="font-semibold text-slate-700 dark:text-slate-200">{RULES.length}</span>
-          {query && filtered.length !== RULES.length && (
+          Правил: <span className="font-semibold text-slate-700 dark:text-slate-200">{rules.length}</span>
+          {query && filtered.length !== rules.length && (
             <> · знайдено: <span className="font-semibold text-slate-700 dark:text-slate-200">{filtered.length}</span></>
           )}
         </div>
       </div>
 
-      {/* Таблиця */}
       <Card>
         <div className="overflow-x-auto">
           <table className="min-w-[480px] w-full text-sm">
@@ -183,13 +207,15 @@ function TabRules() {
               </tr>
             </thead>
             <tbody>
-              {pageRules.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={3} className="px-4 py-12 text-center"><Spinner size={20} /></td></tr>
+              ) : pageRules.length === 0 ? (
                 <tr><td colSpan={3} className="px-4 py-12 text-center text-sm text-slate-500">Не знайдено</td></tr>
               ) : (
                 pageRules.map((r, i) => {
-                  const text = ruleToString(r);
+                  const text = `ЯКЩО ${r.condition}, ТО споживання=${r.consequent_gw >= 0 ? '+' : ''}${r.consequent_gw.toFixed(2)} ГВт`;
                   return (
-                    <tr key={r.id} className="border-b border-slate-200 dark:border-slate-800 last:border-b-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <tr key={r.id} className="border-b border-slate-200 dark:border-slate-800 last:border-b-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
                       <td className="px-4 py-3 text-xs text-slate-400 dark:text-slate-500 tabular-nums">{start + i + 1}</td>
                       <td className="px-4 py-3">
                         <div className="font-mono text-[12px] leading-relaxed text-slate-800 dark:text-slate-200">
@@ -211,20 +237,13 @@ function TabRules() {
         </div>
       </Card>
 
-      {/* Пагінація */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 flex-wrap gap-2">
-          <span>
-            {filtered.length === 0 ? 0 : start + 1}–{Math.min(filtered.length, start + PER_PAGE)} з {filtered.length}
-          </span>
+          <span>{filtered.length === 0 ? 0 : start + 1}–{Math.min(filtered.length, start + PER_PAGE)} з {filtered.length}</span>
           <div className="flex items-center gap-1">
-            <Button variant="secondary" size="sm" leftIcon={<I.ChevronLeft size={14} />} disabled={safePage <= 1} onClick={() => setPage((p) => p - 1)}>
-              Попередня
-            </Button>
+            <Button variant="secondary" size="sm" leftIcon={<I.ChevronLeft size={14} />} disabled={safePage <= 1} onClick={() => setPage((p) => p - 1)}>Попередня</Button>
             <span className="px-2 tabular-nums">{safePage} / {totalPages}</span>
-            <Button variant="secondary" size="sm" rightIcon={<I.ChevronRight size={14} />} disabled={safePage >= totalPages} onClick={() => setPage((p) => p + 1)}>
-              Наступна
-            </Button>
+            <Button variant="secondary" size="sm" rightIcon={<I.ChevronRight size={14} />} disabled={safePage >= totalPages} onClick={() => setPage((p) => p + 1)}>Наступна</Button>
           </div>
         </div>
       )}
@@ -232,269 +251,207 @@ function TabRules() {
   );
 }
 
-// ── TAB 3: Активні правила для прогнозу ──────────────────────────────────────
-
-// Кільцева діаграма
-function PieView() {
-  const { theme } = useTheme();
-  const dark = theme === 'dark';
-  const data = ACTIVE_RULES.map((r, i) => ({
-    name: 'R' + (i + 1),
-    value: r.contribution,
-    pct: r.pctOfTotal,
-  }));
-  return (
-    <div className="relative" style={{ height: 200 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="name"
-            cx="50%"
-            cy="50%"
-            innerRadius={52}
-            outerRadius={80}
-            paddingAngle={2}
-            stroke="none"
-            animationDuration={500}
-          >
-            {data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i]} />)}
-          </Pie>
-          <RTooltip
-            contentStyle={{ background: dark ? '#1e293b' : '#fff', border: 'none', borderRadius: 6, fontSize: 12 }}
-            formatter={(v, n) => [`${fmt(v, 2)} ГВт`, n]}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-      {/* Центр пончика */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium">Прогноз</div>
-        <div className="text-xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums leading-tight">
-          {fmt(ACTIVE_CONTEXT.forecast, 1)} ГВт
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Стекований бар
-function StackedBar() {
-  const total = ACTIVE_RULES.reduce((s, r) => s + r.contribution, 0);
-  return (
-    <div>
-      <div className="flex h-9 w-full overflow-hidden rounded-md ring-1 ring-slate-200 dark:ring-slate-700">
-        {ACTIVE_RULES.map((r, i) => {
-          const w = (r.contribution / total) * 100;
-          return (
-            <div
-              key={r.id}
-              className="relative h-full hover:brightness-110 transition-all"
-              style={{ width: `${w}%`, background: PIE_COLORS[i] }}
-              title={`R${i + 1}: ${fmt(r.contribution, 2)} ГВт (${fmt(r.pctOfTotal, 1)}%)`}
-            >
-              {w > 12 && (
-                <span className="absolute inset-0 flex items-center justify-center text-[11px] font-medium text-white drop-shadow-sm">
-                  R{i + 1}
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-1 flex justify-between text-[10px] text-slate-400 dark:text-slate-500 tabular-nums">
-        <span>0 ГВт</span>
-        <span>{fmt(total, 1)} ГВт</span>
-      </div>
-    </div>
-  );
-}
-
-function AnalysisResult() {
-  const CTX = [
-    { label: 'Дата',          value: ACTIVE_CONTEXT.dateLabel,           icon: I.Calendar },
-    { label: 'Температура',   value: `+${ACTIVE_CONTEXT.temperature} °C`, icon: I.Thermometer },
-    { label: 'День',          value: ACTIVE_CONTEXT.dayOfWeekLabel,      icon: I.Clock },
-    { label: 'Сезон',         value: ACTIVE_CONTEXT.season,             icon: I.Sun },
-    { label: 'Прогноз',       value: `${fmt(ACTIVE_CONTEXT.forecast, 1)} ГВт`, icon: I.TrendingUp, highlight: true },
-  ];
-
-  return (
-    <div className="space-y-4">
-      {/* Контекст */}
-      <Card padding="p-4">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Контекст прогнозу</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          {CTX.map((c) => {
-            const IconC = c.icon;
-            return (
-              <div
-                key={c.label}
-                className={cx(
-                  'rounded-md border px-3 py-2.5',
-                  c.highlight
-                    ? 'border-blue-200 bg-blue-50/60 dark:bg-blue-950/40 dark:border-blue-900/60'
-                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/60',
-                )}
-              >
-                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-medium">
-                  <IconC size={11} />
-                  {c.label}
-                </div>
-                <div className={cx(
-                  'mt-1 text-sm font-semibold tabular-nums',
-                  c.highlight ? 'text-blue-700 dark:text-blue-300' : 'text-slate-900 dark:text-slate-100',
-                )}>
-                  {c.value}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* Активні правила зі силою */}
-      <Card padding="p-4">
-        <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Найсильніші правила</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Нечіткі правила з найбільшою активаційною силою</p>
-          </div>
-          <Badge tone="slate">{ACTIVE_RULES.length} активних</Badge>
-        </div>
-        <div className="space-y-3">
-          {ACTIVE_RULES.map((r, i) => (
-            <div key={r.id}>
-              <div className="flex items-start gap-2 mb-1">
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono tabular-nums mt-0.5 shrink-0">{i + 1}.</span>
-                <div className="font-mono text-xs leading-relaxed text-slate-800 dark:text-slate-200 min-w-0">
-                  ЯКЩО {r.antecedents.join(' І ')}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 pl-4">
-                <ProgressBar value={r.strength} max={1} className="flex-1" height={8} />
-                <span className="text-xs tabular-nums font-medium text-slate-700 dark:text-slate-300 w-8 text-right">{fmt(r.strength, 2)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Внесок + Pie — стек на мобільному, grid на lg+ */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <Card padding="p-4" className="lg:col-span-3">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">Внесок у фінальний прогноз</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Як кожне правило формує прогнозоване значення</p>
-          <StackedBar />
-          <div className="mt-3 space-y-1.5">
-            {ACTIVE_RULES.map((r, i) => (
-              <div key={r.id} className="flex items-center gap-2 text-xs">
-                <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: PIE_COLORS[i] }} />
-                <span className="font-mono text-slate-700 dark:text-slate-300 truncate flex-1 min-w-0">
-                  R{i + 1}: ЯКЩО {r.antecedents.join(' І ')}
-                </span>
-                <span className="tabular-nums text-slate-500 dark:text-slate-400 shrink-0">{fmt(r.contribution, 2)} ГВт</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card padding="p-4" className="lg:col-span-2">
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">Розподіл впливу</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Частка кожного правила у підсумковому прогнозі</p>
-          <PieView />
-        </Card>
-      </div>
-    </div>
-  );
-}
-
+// ── TAB 3: Активні правила (РЕАЛЬНІ через POST /api/model/analyze) ───────
 function TabActiveRules() {
   const { showToast } = useToast();
-  const [date, setDate]       = useState('2026-05-09');
-  const [time, setTime]       = useState('18:00');
-  const [analyzed, setAnalyzed] = useState(true);
-  const [loading, setLoading]   = useState(false);
+  const today = new Date().toISOString().split('T')[0];
+  const [date, setDate] = useState(today);
+  const [time, setTime] = useState('18:00');
+  const [analysis, setAnalysis] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const HOURS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, '0')}:00`);
-
-  function onAnalyze() {
+  async function handleAnalyze() {
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await fetch(`${API_BASE}/api/model/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, time }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setAnalysis(data);
+    } catch (e) {
+      showToast({ type: 'error', title: 'Помилка аналізу', description: e.message });
+    } finally {
       setLoading(false);
-      setAnalyzed(true);
-      showToast({ type: 'success', title: 'Аналіз завершено', description: '5 активних правил знайдено' });
-    }, 700);
+    }
   }
+
+  // Авто-аналіз при першому відкритті
+  useEffect(() => {
+    handleAnalyze();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-4">
-      {/* Форма вибору */}
+      {/* Форма вибору моменту */}
       <Card padding="p-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Для якої години аналізувати?</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Дата</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="h-9 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-500 dark:text-slate-400 block mb-1">Час</label>
-                <Select value={time} onChange={(v) => setTime(v)} options={HOURS.map((h) => ({ value: h, label: h }))} />
-              </div>
-            </div>
+        <div className="text-sm font-semibold mb-3 text-slate-900 dark:text-slate-100">Для якої години аналізувати?</div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Дата</label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
-          <Button
-            leftIcon={loading ? <Spinner size={14} /> : <I.Play size={14} />}
-            disabled={loading}
-            onClick={onAnalyze}
-          >
+          <div>
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Час</label>
+            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
+          <Button variant="primary" leftIcon={<I.Zap size={14} />} onClick={handleAnalyze} disabled={loading}>
             {loading ? 'Аналізую…' : 'Аналізувати'}
           </Button>
         </div>
       </Card>
 
-      {analyzed ? <AnalysisResult /> : (
-        <Card padding="p-10 text-center">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Натисніть «Аналізувати», щоб побачити активні правила для обраного часу.
-          </p>
+      {!analysis ? (
+        <Card padding="p-8" className="text-center text-slate-500">
+          {loading ? <Spinner size={24} /> : 'Натисніть «Аналізувати»'}
         </Card>
+      ) : (
+        <>
+          {/* Контекст прогнозу */}
+          <Card padding="p-4">
+            <div className="text-sm font-semibold mb-3 text-slate-900 dark:text-slate-100">Контекст прогнозу</div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {[
+                { icon: 'Calendar', label: 'Дата',        value: `${analysis.context.date}, ${analysis.context.time}` },
+                { icon: 'Thermometer', label: 'Температура', value: `${analysis.context.temperature >= 0 ? '+' : ''}${analysis.context.temperature} °C` },
+                { icon: 'Calendar', label: 'День',        value: `${analysis.context.weekday} (${analysis.context.day_type.toLowerCase()})` },
+                { icon: 'Sun',      label: 'Сезон',       value: analysis.context.season },
+                { icon: 'TrendingUp', label: 'Прогноз',   value: `${analysis.forecast_gw} ГВт`, highlight: true },
+              ].map((item) => (
+                <div key={item.label} className={cx(
+                  'rounded-md border p-3',
+                  item.highlight
+                    ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40'
+                )}>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">{item.label}</div>
+                  <div className={cx('text-sm font-semibold mt-1', item.highlight ? 'text-blue-700 dark:text-blue-300' : 'text-slate-800 dark:text-slate-100')}>
+                    {item.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Топ-5 правил */}
+          <Card padding="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Найсильніші правила</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Нечіткі правила з найбільшою активаційною силою</div>
+              </div>
+              <Badge tone="slate">{analysis.active_rules.length} активних</Badge>
+            </div>
+            <div className="space-y-2.5">
+              {analysis.active_rules.map((r, i) => {
+                const tone = r.weight > 0.7 ? 'bg-emerald-500' : r.weight >= 0.4 ? 'bg-amber-500' : 'bg-slate-400';
+                return (
+                  <div key={r.id} className="flex items-center gap-2.5">
+                    <div className="w-5 text-xs text-slate-500 tabular-nums">{i + 1}.</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-mono text-slate-700 dark:text-slate-300 mb-1 truncate" title={r.condition}>
+                        ЯКЩО {r.condition}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div className={cx('h-full', tone)} style={{ width: `${r.weight * 100}%` }} />
+                        </div>
+                        <span className="text-xs tabular-nums font-medium text-slate-700 dark:text-slate-300 w-10 text-right">
+                          {fmt(r.weight, 2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+
+          {/* Внесок у фінальний прогноз */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <Card padding="p-4" className="lg:col-span-3">
+              <div className="text-sm font-semibold mb-2 text-slate-900 dark:text-slate-100">Внесок у фінальний прогноз</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-3">Як кожне правило формує прогнозоване значення</div>
+              <div className="space-y-2">
+                {analysis.active_rules.map((r, i) => (
+                  <div key={r.id} className="flex items-center gap-2 text-xs">
+                    <span className="font-medium text-slate-700 dark:text-slate-300 w-8">R{i + 1}:</span>
+                    <span className="flex-1 font-mono text-slate-600 dark:text-slate-400 truncate">{r.condition}</span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200 tabular-nums w-20 text-right">
+                      {r.contribution_gw.toFixed(2)} ГВт
+                    </span>
+                  </div>
+                ))}
+                <div className="border-t pt-2 mt-2 flex items-center gap-2 text-sm font-semibold">
+                  <span className="flex-1 text-slate-700 dark:text-slate-200">Сума (фінальний прогноз):</span>
+                  <span className="text-blue-700 dark:text-blue-300 tabular-nums">{analysis.forecast_gw} ГВт</span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Розподіл впливу */}
+            <Card padding="p-4" className="lg:col-span-2">
+              <div className="text-sm font-semibold mb-2 text-slate-900 dark:text-slate-100">Розподіл впливу</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mb-3">Частка кожного правила</div>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie
+                    data={analysis.active_rules.map((r, i) => ({ name: `R${i+1}`, value: Math.abs(r.contribution_gw) }))}
+                    dataKey="value"
+                    cx="50%" cy="50%"
+                    innerRadius={45}
+                    outerRadius={70}
+                    paddingAngle={2}
+                  >
+                    {analysis.active_rules.map((_, i) => (
+                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <RTooltip
+                    formatter={(v) => `${fmt(v, 2)} ГВт`}
+                    contentStyle={{ background: 'rgba(15,23,42,0.95)', border: 'none', borderRadius: 6, fontSize: 11, color: '#fff' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="text-center text-xs text-slate-500 dark:text-slate-400 -mt-2">
+                Прогноз: <span className="font-semibold text-slate-800 dark:text-slate-200">{analysis.forecast_gw} ГВт</span>
+              </div>
+            </Card>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-// ── Root ──────────────────────────────────────────────────────────────────────
+// ── Root ─────────────────────────────────────────────────────────────────────
 const TABS = [
   { value: 'membership', label: 'Функції належності' },
-  { value: 'rules',      label: 'Правила', badge: RULES.length },
+  { value: 'rules',      label: 'Правила' },
   { value: 'active',     label: 'Активні правила' },
 ];
 
 export default function InterpretationPage() {
-  const [tab, setTab]       = useState('membership');
-  const [helpOpen, setHelpOpen] = useState(false);
+  const [tab, setTab] = useState('membership');
+  const [rulesCount, setRulesCount] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/model/rules`)
+      .then(r => r.json())
+      .then(d => setRulesCount(d.rules?.length || 0))
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="space-y-4">
       <SectionHeader
         title="Структура нечіткої моделі"
         subtitle="Як ANFIS приймає рішення — функції належності і правила виведення"
-        right={
-          <Button variant="secondary" size="sm" leftIcon={<I.Info size={14} />} onClick={() => setHelpOpen(true)}>
-            Що це?
-          </Button>
-        }
       />
 
-      {/* Tabs з overflow-x-auto */}
       <div className="overflow-x-auto scrollbar-none">
         <div className="border-b border-slate-200 dark:border-slate-800">
           <div className="flex gap-1 -mb-px min-w-max">
@@ -512,9 +469,9 @@ export default function InterpretationPage() {
                   )}
                 >
                   {t.label}
-                  {t.badge != null && (
-                    <span className="ml-1.5 inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-300">
-                      {t.badge}
+                  {t.value === 'rules' && rulesCount != null && (
+                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 text-[10px] rounded bg-slate-200 dark:bg-slate-700">
+                      {rulesCount}
                     </span>
                   )}
                 </button>
@@ -529,26 +486,6 @@ export default function InterpretationPage() {
         {tab === 'rules'      && <TabRules />}
         {tab === 'active'     && <TabActiveRules />}
       </div>
-
-      {/* Help Modal */}
-      <Modal
-        open={helpOpen}
-        onClose={() => setHelpOpen(false)}
-        title="Що таке нечітка логіка?"
-        footer={<Button onClick={() => setHelpOpen(false)}>Зрозуміло</Button>}
-      >
-        <div className="space-y-3 leading-relaxed text-slate-700 dark:text-slate-300">
-          <p>
-            <span className="font-medium text-slate-900 dark:text-slate-100">Нечітка логіка</span> — це підхід, у якому числові величини (температура, час доби) перетворюються на людино-зрозумілі категорії (низька, помірна, висока) з частковою належністю.
-          </p>
-          <p>
-            <span className="font-medium text-slate-900 dark:text-slate-100">ANFIS</span> (Adaptive Neuro-Fuzzy Inference System) поєднує нечітку логіку з нейронною мережею: правила «ЯКЩО…ТО…» налаштовуються автоматично на історичних даних, але залишаються зрозумілими людині.
-          </p>
-          <p>
-            Це і є ключова перевага моделі — вона <span className="font-medium text-slate-900 dark:text-slate-100">пояснювана</span>: для будь-якого прогнозу можна побачити, які правила і з якою силою спрацювали.
-          </p>
-        </div>
-      </Modal>
     </div>
   );
 }
