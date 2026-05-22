@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ComposedChart, Line, Area, BarChart, Bar,
@@ -9,12 +9,10 @@ import { Button, IconButton, StatusDot } from '../components/ui';
 import * as I from '../components/ui/Icons';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
-import {
-  CHART_DATA, PERIOD_OPTIONS, PERIOD_SUMMARIES, NOW_REF_INDEX,
-  RECENT_FORECASTS, SPARKLINE_24H, SPARKLINE_7D, SPARKLINE_30D,
-  ERROR_DISTRIBUTION,
-} from '../lib/mockData';
+import { CHART_DATA, PERIOD_OPTIONS, PERIOD_SUMMARIES, NOW_REF_INDEX, ERROR_DISTRIBUTION } from '../lib/mockData';
 import { cx, fmtDecimal } from '../lib/utils';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // ── Chart palette ────────────────────────────────────────────────────────────
 function palette(dark) {
@@ -121,42 +119,79 @@ function ChartTooltip({ active, payload, period, pal }) {
 
 // ── KPI Row ───────────────────────────────────────────────────────────────────
 function KpiRow() {
+  const [modelInfo, setModelInfo] = useState(null);
+  const [preview, setPreview]     = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/model/info`).then(r=>r.json()).then(setModelInfo).catch(()=>{});
+    fetch(`${API_BASE}/api/forecast/preview?hours=2`).then(r=>r.json()).then(setPreview).catch(()=>{});
+  }, []);
+
+  const nextHour = new Date(); nextHour.setHours(nextHour.getHours()+1, 0, 0, 0);
+  const nextLabel = `${String(nextHour.getHours()).padStart(2,'0')}:00`;
+  const nextFc  = preview?.points?.[1]?.forecast;
+  const nextCI  = preview?.points?.[1] ? ((preview.points[1].upper_bound - preview.points[1].lower_bound)/2).toFixed(2) : null;
+  const mape    = modelInfo?.metrics?.mape;
+  const version = modelInfo?.version ?? '—';
+  const trainDate = modelInfo?.training_date
+    ? new Date(modelInfo.training_date).toLocaleDateString('uk-UA',{day:'numeric',month:'short',year:'numeric'})
+    : '—';
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {/* 1 */}
+      {/* 1 — Поточне споживання */}
       <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-shadow">
         <div className="text-xs text-slate-500 dark:text-slate-400">Поточне споживання</div>
-        <div className="mt-1.5 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
-          14,8<span className="text-base font-normal text-slate-500 dark:text-slate-400"> ГВт</span>
+        <div className="mt-1.5 text-base font-semibold text-slate-400 dark:text-slate-500">
+          Недоступно
         </div>
-        <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">фактичне о 14:00</div>
+        <div className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+          ⚠ Дані Ukrenergo закриті під час воєнного стану
+        </div>
       </div>
-      {/* 2 */}
+
+      {/* 2 — Прогноз на наступну годину */}
       <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-shadow">
-        <div className="text-xs text-slate-500 dark:text-slate-400">Прогноз на 15:00</div>
-        <div className="mt-1.5 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
-          15,1<span className="text-base font-normal text-slate-500 dark:text-slate-400"> ГВт</span>
-        </div>
-        <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">±0,3 ГВт (95 % ДІ)</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">Прогноз на {nextLabel}</div>
+        {nextFc ? (
+          <>
+            <div className="mt-1.5 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+              {nextFc.toFixed(2).replace('.',',')}
+              <span className="text-base font-normal text-slate-500 dark:text-slate-400"> ГВт</span>
+            </div>
+            {nextCI && <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">±{nextCI} ГВт (95 % ДІ)</div>}
+          </>
+        ) : (
+          <div className="mt-1.5 text-base text-slate-400">Завантаження…</div>
+        )}
       </div>
-      {/* 3 */}
+
+      {/* 3 — MAPE моделі */}
       <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-shadow">
-        <div className="text-xs text-slate-500 dark:text-slate-400">MAPE за 7 днів</div>
-        <div className="mt-1.5 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
-          2,14<span className="text-base font-normal text-slate-500 dark:text-slate-400"> %</span>
-        </div>
-        <div className="mt-1 text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-          <I.TrendingDown size={12} />-0,3 пп до тижня тому
-        </div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">MAPE моделі (test 2021)</div>
+        {mape ? (
+          <>
+            <div className="mt-1.5 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+              {String(mape).replace('.',',')}
+              <span className="text-base font-normal text-slate-500 dark:text-slate-400"> %</span>
+            </div>
+            <div className="mt-1 text-xs text-green-600 dark:text-green-400">
+              RMSE {modelInfo?.metrics?.rmse} МВт
+            </div>
+          </>
+        ) : (
+          <div className="mt-1.5 text-base text-slate-400">Завантаження…</div>
+        )}
       </div>
-      {/* 4 */}
+
+      {/* 4 — Статус моделі */}
       <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-shadow">
         <div className="text-xs text-slate-500 dark:text-slate-400">Статус моделі</div>
         <div className="mt-1.5 flex items-center gap-2">
           <I.CheckCircle size={20} className="text-green-600 dark:text-green-400" />
-          <span className="text-base font-medium text-slate-900 dark:text-slate-100">Активна</span>
+          <span className="text-base font-medium text-slate-900 dark:text-slate-100">{version}</span>
         </div>
-        <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">оновлено 02.05.2026</div>
+        <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">навчено {trainDate}</div>
       </div>
     </div>
   );
@@ -277,27 +312,58 @@ function ConsumptionChart({ period, setPeriod }) {
 // ── Recent Forecasts ─────────────────────────────────────────────────────────
 function RecentForecasts() {
   const navigate = useNavigate();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/history/?limit=5`)
+      .then(r=>r.json())
+      .then(d=>{ setItems(d.items||[]); setLoading(false); })
+      .catch(()=>setLoading(false));
+  }, []);
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    const mon = ['січ','лют','бер','кві','трав','чер','лип','сер','вер','жов','лис','гру'][d.getMonth()];
+    return `${d.getDate()} ${mon}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+
+  const horizonLabel = (h) => ({
+    '1h':'1 год','6h':'6 год','24h':'24 год','48h':'48 год','7d':'7 днів'
+  }[h] || h);
+
   return (
     <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-col hover:shadow-md transition-shadow">
       <div className="px-4 pt-4 pb-2">
         <h3 className="text-base font-medium text-slate-900 dark:text-slate-100">Останні прогнози</h3>
       </div>
       <ul className="flex-1 px-2 pb-1">
-        {RECENT_FORECASTS.map((f) => (
+        {loading ? (
+          <li className="px-2 py-4 text-sm text-slate-400 text-center">Завантаження…</li>
+        ) : items.length === 0 ? (
+          <li className="px-2 py-4 text-sm text-slate-400 text-center">Ще немає прогнозів</li>
+        ) : items.map((f) => (
           <li key={f.id}>
             <button
               type="button"
               onClick={() => navigate('/history')}
-              className="w-full flex items-center justify-between gap-3 px-2 py-2.5 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700/40 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="w-full flex items-center justify-between gap-3 px-2 py-2.5 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700/40 text-left transition-colors"
             >
               <div className="min-w-0">
-                <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{f.dateLabel}</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400">{f.horizonLabel}</div>
+                <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                  {f.name || fmtDate(f.created_at)}
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {horizonLabel(f.horizon)} · {f.source === 'manual' ? 'ручн.' : 'авто'}
+                </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-sm font-medium text-slate-900 dark:text-slate-100 tabular-nums">{fmt(f.value)} ГВт</div>
-                <div className={cx('text-xs tabular-nums', mapeClass(f.errorPercent))}>
-                  δ {fmt(f.errorPercent)} %
+                <div className="text-sm font-medium text-slate-900 dark:text-slate-100 tabular-nums">
+                  {f.avg_forecast ? `${f.avg_forecast.toFixed(2).replace('.',',')} ГВт` : '—'}
+                </div>
+                <div className="text-xs text-blue-600 dark:text-blue-400 tabular-nums">
+                  δ {f.model_mape ? String(f.model_mape).replace('.',',') : '—'} %
                 </div>
               </div>
             </button>
@@ -305,11 +371,8 @@ function RecentForecasts() {
         ))}
       </ul>
       <div className="border-t border-slate-200 dark:border-slate-700">
-        <button
-          type="button"
-          onClick={() => navigate('/history')}
-          className="w-full px-3 py-2.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700/40 rounded-b-lg transition-colors"
-        >
+        <button type="button" onClick={() => navigate('/history')}
+          className="w-full px-3 py-2.5 text-sm text-blue-600 dark:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-700/40 rounded-b-lg transition-colors">
           Усі прогнози →
         </button>
       </div>
@@ -322,12 +385,22 @@ function ModelQuality() {
   const { theme } = useTheme();
   const dark = theme === 'dark';
   const pal = palette(dark);
+  const [modelInfo, setModelInfo] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/model/info`).then(r=>r.json()).then(setModelInfo).catch(()=>{});
+  }, []);
+
+  const mape  = modelInfo?.metrics?.mape;
+  const rmse  = modelInfo?.metrics?.rmse;
+  const mae   = modelInfo?.metrics?.mae;
+  const fmt2  = (v) => v != null ? String(v).replace('.',',') : '…';
 
   const sparklines = [
-    { label: 'Rolling MAPE 24 г', value: '2,08 %', data: SPARKLINE_24H },
-    { label: 'Rolling MAPE 7 д',  value: '2,14 %', data: SPARKLINE_7D  },
-    { label: 'Rolling MAPE 30 д', value: '2,31 %', data: SPARKLINE_30D },
-    { label: 'Bias', value: null, footer: 'модель злегка завищує' },
+    { label: 'MAPE (test 2021)',    value: mape ? `${fmt2(mape)} %` : '…',    footer: 'тестова вибірка' },
+    { label: 'RMSE (test 2021)',    value: rmse ? `${fmt2(rmse)} МВт` : '…',  footer: 'середньокв. помилка' },
+    { label: 'MAE (test 2021)',     value: mae  ? `${fmt2(mae)} МВт` : '…',   footer: 'середня абс. помилка' },
+    { label: 'Джерело даних',       value: null, footer: 'ОЕС України 2017–2021' },
   ];
 
   return (
@@ -342,18 +415,10 @@ function ModelQuality() {
         {sparklines.map((s) => (
           <div key={s.label} className="pl-0 md:pl-4 first:pl-0">
             <div className="text-xs text-slate-500 dark:text-slate-400">{s.label}</div>
-            {s.value != null ? (
-              <div className="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{s.value}</div>
-            ) : (
-              <div className="mt-1 text-xl font-semibold text-green-600 dark:text-green-400 tabular-nums">+0,8 %</div>
-            )}
-            <div className="mt-1.5 h-7">
-              {s.data ? (
-                <Sparkline data={s.data} color={pal.actual} />
-              ) : (
-                <div className="text-xs text-slate-500 dark:text-slate-400">{s.footer}</div>
-              )}
+            <div className="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+              {s.value ?? '—'}
             </div>
+            <div className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{s.footer}</div>
           </div>
         ))}
       </div>
