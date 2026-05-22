@@ -222,16 +222,23 @@ def generate_forecast_series(start_iso, hours, weather_params, calendar_params):
         while len(weather_list) < hours:
             weather_list.append(weather_list[-1])
 
+    def _safe(v, default):
+        """Захист від None — повертає default якщо значення None."""
+        try:
+            return float(v) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+
     results = []
     for i in range(hours):
         ts = start + datetime.timedelta(hours=i)
         ci_multiplier = 1.0 + (i // 24) * 0.005
-        w  = weather_list[i]
+        w  = weather_list[i] if weather_list[i] else {}
         pred = anfis_predict(
             hour=ts.hour, month=ts.month, day_of_week=ts.weekday(),
-            temperature=w.get("temperature",10.0),
-            cloud_cover=w.get("cloud_cover",50.0),
-            wind_speed=w.get("wind_speed",5.0),
+            temperature=_safe(w.get("temperature"), 10.0),
+            cloud_cover=_safe(w.get("cloud_cover"), 50.0),
+            wind_speed=_safe(w.get("wind_speed"),   5.0),
             is_holiday=calendar_params.get("is_holiday",False),
             is_pre_holiday=calendar_params.get("is_pre_holiday",False),
             is_school_break=calendar_params.get("is_school_break",False),
@@ -245,9 +252,9 @@ def generate_forecast_series(start_iso, hours, weather_params, calendar_params):
             "upper_bound": round(pred["forecast"]+ci_half, 3),
             "ci_level":    0.95,
             "weather": {
-                "temperature": round(w.get("temperature",10.0),1),
-                "cloud_cover": round(w.get("cloud_cover",50.0),0),
-                "wind_speed":  round(w.get("wind_speed",5.0),1),
+                "temperature": round(_safe(w.get("temperature"), 10.0), 1),
+                "cloud_cover": round(_safe(w.get("cloud_cover"), 50.0), 0),
+                "wind_speed":  round(_safe(w.get("wind_speed"),  5.0),  1),
             },
         })
     return results
