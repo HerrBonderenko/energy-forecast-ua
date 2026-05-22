@@ -15,6 +15,8 @@ import { useTheme } from '../contexts/ThemeContext';
 import { cx, fmtDecimal, NBSP } from '../lib/utils';
 import { createForecast, getCurrentWeather, getBaseLoad } from '../lib/api';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 // ── Constants ────────────────────────────────────────────────────────────────
 const HORIZON_OPTIONS = [
   { value: '1h',  label: '1 година' },
@@ -269,8 +271,33 @@ export default function ForecastPage() {
   const [isWeekend, setIsWeekend]       = useState(false);
   const [isHoliday, setIsHoliday]       = useState(false);
 
-  const [phase, setPhase]   = useState('empty');
-  const [result, setResult] = useState(null);
+  const [phase, setPhase]     = useState('empty');
+  const [result, setResult]   = useState(null);
+  const [savedId, setSavedId] = useState(null);    // ID збереженого прогнозу
+  const [saveOpen, setSaveOpen] = useState(false); // модал збереження
+  const [saveName, setSaveName] = useState('');
+  const [saveNote, setSaveNote] = useState('');
+  const [saving, setSaving]   = useState(false);
+
+  async function handleSaveForecast() {
+    if (!savedId) return;
+    setSaving(true);
+    try {
+      await fetch(`${API_BASE}/api/history/${savedId}/label`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: saveName || null, note: saveNote || null }),
+      });
+      showToast({ type: 'success', title: 'Прогноз збережено', description: saveName ? `«${saveName}»` : 'Без назви' });
+      setSaveOpen(false);
+      setSaveName('');
+      setSaveNote('');
+    } catch (e) {
+      showToast({ type: 'error', title: 'Помилка збереження', description: e.message });
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handleForecast() {
     setPhase('loading');
@@ -355,6 +382,7 @@ export default function ForecastPage() {
         maxLabel:     forecastPts[maxIdx]?.label ?? '–',
         minLabel:     forecastPts[minIdx]?.label ?? '–',
       });
+      if (data.id) setSavedId(data.id);
       setPhase('ready');
     } catch (e) {
       setPhase('empty');
@@ -458,13 +486,61 @@ export default function ForecastPage() {
                   showToast({ type: 'info', title: 'Перехід до Сценарного аналізу', description: 'Параметри перенесено' });
                   navigate('/scenario-analysis');
                 }}
-                onSave={() => showToast({ type: 'success', title: 'Прогноз збережено' })}
+                onSave={() => { setSaveName(''); setSaveNote(''); setSaveOpen(true); }}
                 onExport={() => showToast({ type: 'info', title: 'Експорт у CSV запущено' })}
               />
             )}
           </Card>
         </div>
       </div>
+      {/* Модал збереження прогнозу */}
+      {saveOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl p-6 w-full max-w-md mx-4 space-y-4">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Зберегти прогноз</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Прогноз вже збережено автоматично. Додайте назву щоб легше знайти його в Історії.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Назва (необов'язково)</label>
+                <input
+                  type="text"
+                  value={saveName}
+                  onChange={(e) => setSaveName(e.target.value)}
+                  placeholder="Наприклад: Зима 2026, пік"
+                  maxLength={120}
+                  className="w-full h-9 px-3 text-sm rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">Примітка</label>
+                <textarea
+                  value={saveNote}
+                  onChange={(e) => setSaveNote(e.target.value)}
+                  placeholder="Додаткова інформація..."
+                  rows={2}
+                  maxLength={300}
+                  className="w-full px-3 py-2 text-sm rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-300 dark:border-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                onClick={() => setSaveOpen(false)}
+                className="px-4 h-9 text-sm rounded-md text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Скасувати
+              </button>
+              <button
+                onClick={handleSaveForecast}
+                disabled={saving}
+                className="px-4 h-9 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? 'Збереження…' : 'Зберегти'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

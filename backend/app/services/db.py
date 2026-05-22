@@ -42,10 +42,19 @@ def init_db():
                 max_gw          REAL,
                 min_gw          REAL,
                 max_hour        INTEGER,
-                min_hour        INTEGER
+                min_hour        INTEGER,
+                name            TEXT,
+                note            TEXT
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_forecasts_created ON forecasts(created_at DESC)")
+
+        # Додаємо колонки name/note якщо їх ще немає (для вже існуючих БД)
+        for col in ("name TEXT", "note TEXT"):
+            try:
+                conn.execute(f"ALTER TABLE forecasts ADD COLUMN {col}")
+            except Exception:
+                pass  # колонка вже існує
 
         # Таблиця сценаріїв
         conn.execute("""
@@ -116,7 +125,8 @@ def get_forecasts(limit: int = 50, days: Optional[int] = None) -> list:
             cursor = conn.execute("""
                 SELECT id, created_at, start_time, hours, horizon_label,
                        model_version, model_mape, weather_source,
-                       avg_gw, max_gw, min_gw, max_hour, min_hour
+                       avg_gw, max_gw, min_gw, max_hour, min_hour,
+                       name, note
                 FROM forecasts
                 WHERE created_at >= ?
                 ORDER BY created_at DESC
@@ -126,7 +136,8 @@ def get_forecasts(limit: int = 50, days: Optional[int] = None) -> list:
             cursor = conn.execute("""
                 SELECT id, created_at, start_time, hours, horizon_label,
                        model_version, model_mape, weather_source,
-                       avg_gw, max_gw, min_gw, max_hour, min_hour
+                       avg_gw, max_gw, min_gw, max_hour, min_hour,
+                       name, note
                 FROM forecasts
                 ORDER BY created_at DESC
                 LIMIT ?
@@ -295,3 +306,17 @@ def duplicate_scenario(scenario_id: int) -> Optional[dict]:
         deltas=src["deltas"],
     )
     return get_scenario_by_id(new_id)
+
+
+def update_forecast_label(forecast_id: int, name: Optional[str], note: Optional[str]) -> bool:
+    """Оновлює назву і примітку прогнозу."""
+    conn = get_conn()
+    try:
+        cursor = conn.execute(
+            "UPDATE forecasts SET name = ?, note = ? WHERE id = ?",
+            (name, note, forecast_id)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()

@@ -157,6 +157,12 @@ function ExpandedDetail({ forecastId }) {
         </div>
         <div>
           <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Параметри</div>
+          {detail.name && (
+            <div className="mb-2 p-2 rounded-md bg-blue-50 dark:bg-blue-900/20 text-sm font-medium text-blue-800 dark:text-blue-300">
+              📌 {detail.name}
+              {detail.note && <div className="text-xs font-normal mt-0.5 text-blue-600 dark:text-blue-400">{detail.note}</div>}
+            </div>
+          )}
           <dl className="space-y-1.5 text-sm">
             {[
               ['Початок', fmtIso(detail.start_time)],
@@ -203,6 +209,9 @@ const HistoryRow = memo(function HistoryRow({ forecast: f, expanded, onToggle })
         onClick={() => onToggle(f.id)}
       >
         <td className="px-4 py-3 whitespace-nowrap">
+          {f.name && (
+            <div className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate max-w-[180px]">{f.name}</div>
+          )}
           <div className="text-sm text-slate-800 dark:text-slate-100 tabular-nums">{fmtIso(f.created_at)}</div>
           <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{f.model_version}</div>
         </td>
