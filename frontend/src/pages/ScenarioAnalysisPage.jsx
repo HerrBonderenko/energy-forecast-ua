@@ -369,13 +369,10 @@ export default function ScenarioAnalysisPage() {
               <ChangeSlider label="Δ Хмарність"      unit="%"   value={dCloud} onChange={setDCloud} min={-50} max={50}  step={5}   decimals={0} />
               <ChangeSlider label="Δ Швидкість вітру" unit="м/с" value={dWind}  onChange={setDWind}  min={-10} max={10}  step={0.5} decimals={1} />
             </div>
-            <SectionDivider />
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-700 dark:text-slate-300">{isWeekend ? 'Вихідний' : 'Робочий день'}</span>
-                <Switch checked={isWeekend} onChange={setIsWeekend} />
-              </div>
-              <Checkbox checked={isHoliday}    onChange={setIsHoliday}    label="Святковий день" />
+            <SectionDivider>Тип дня</SectionDivider>
+            <div className="flex flex-col gap-2.5">
+              <Checkbox checked={isWeekend} onChange={setIsWeekend} label="Вихідний день" />
+              <Checkbox checked={isHoliday} onChange={setIsHoliday} label="Державне свято" />
             </div>
           </Card>
 
