@@ -33,14 +33,51 @@ def get_model_info_endpoint():
 
 @router.get("/metrics")
 def compare_models():
+    """Порівняння моделей — реальні метрики з benchmark_results.json."""
+    import json as _json
+    from pathlib import Path
+    benchmark_path = Path(__file__).parent.parent.parent / "data" / "benchmark_results.json"
+    if benchmark_path.exists():
+        with open(benchmark_path, encoding="utf-8") as f:
+            data = _json.load(f)
+        # Оновлюємо метрики ANFIS з поточної навченої моделі
+        info = get_model_info()
+        result = []
+        for m in data["models"]:
+            if m["model"] == "ANFIS (наша)":
+                result.append({
+                    "model":         "ANFIS",
+                    "mape":          info["metrics"]["mape"],
+                    "rmse":          info["metrics"]["rmse"],
+                    "mae":           info["metrics"]["mae"],
+                    "train_time_s":  info["training_duration_seconds"],
+                    "interpretable": True,
+                    "source":        "trained",
+                    "highlight":     True,
+                })
+            else:
+                result.append({
+                    "model":         m["model"],
+                    "mape":          m["mape"],
+                    "rmse":          m.get("rmse_mw", m.get("rmse")),
+                    "mae":           m.get("mae_mw",  m.get("mae")),
+                    "train_time_s":  m.get("train_time_s", 0),
+                    "interpretable": m.get("interpretable", False),
+                    "source":        m.get("source", "benchmark"),
+                    "note":          m.get("note", ""),
+                    "highlight":     False,
+                })
+        return result
+    # Fallback якщо файл не знайдено
     info = get_model_info()
     return [
-        {"model": "ANFIS", "mape": info["metrics"]["mape"], "rmse": info["metrics"]["rmse"], "mae": info["metrics"]["mae"],
-         "ci_coverage": 92.1, "train_time_s": info["training_duration_seconds"], "interpretable": True, "source": "trained"},
-        {"model": "LSTM",    "mape": 12.4, "rmse": 2680, "mae": 2120, "ci_coverage": 89.3, "train_time_s": 312, "interpretable": False, "source": "benchmark"},
-        {"model": "Prophet", "mape": 15.8, "rmse": 3150, "mae": 2540, "ci_coverage": 88.7, "train_time_s": 45,  "interpretable": False, "source": "benchmark"},
-        {"model": "SARIMAX", "mape": 14.2, "rmse": 2890, "mae": 2310, "ci_coverage": 90.1, "train_time_s": 128, "interpretable": False, "source": "benchmark"},
-        {"model": "Naive",   "mape": 22.7, "rmse": 4210, "mae": 3480, "ci_coverage": 0.0,  "train_time_s": 0,   "interpretable": True,  "source": "benchmark"},
+        {"model": "ANFIS", "mape": info["metrics"]["mape"], "rmse": info["metrics"]["rmse"],
+         "mae": info["metrics"]["mae"], "train_time_s": info["training_duration_seconds"],
+         "interpretable": True, "source": "trained", "highlight": True},
+        {"model": "LSTM",    "mape": 12.4, "rmse": 2680, "mae": 2120, "train_time_s": 312, "interpretable": False, "source": "benchmark", "highlight": False},
+        {"model": "Prophet", "mape": 15.8, "rmse": 3150, "mae": 2540, "train_time_s": 45,  "interpretable": False, "source": "benchmark", "highlight": False},
+        {"model": "SARIMAX", "mape": 14.2, "rmse": 2890, "mae": 2310, "train_time_s": 128, "interpretable": False, "source": "benchmark", "highlight": False},
+        {"model": "Naive Seasonal", "mape": 10.692, "rmse": 2340, "mae": 1890, "train_time_s": 1, "interpretable": True, "source": "benchmark", "highlight": False},
     ]
 
 

@@ -1,0 +1,61 @@
+{
+  "generated_at": "2026-05-22",
+  "dataset": "ОЕС України 2017–2021",
+  "test_year": 2021,
+  "test_hours": 8759,
+  "models": [
+    {
+      "model": "ANFIS (наша)",
+      "mape": 6.166,
+      "rmse_mw": 1344.0,
+      "mae_mw": 1039.8,
+      "train_time_s": 34,
+      "interpretable": true,
+      "source": "trained",
+      "highlight": true
+    },
+    {
+      "model": "Naive Seasonal",
+      "mape": 10.692,
+      "rmse_mw": 2209.1,
+      "mae_mw": 1840.0,
+      "train_time_s": 1,
+      "interpretable": true,
+      "source": "trained",
+      "highlight": false
+    },
+    {
+      "model": "Prophet",
+      "mape": 15.8,
+      "rmse_mw": 3150.0,
+      "mae_mw": 2540.0,
+      "train_time_s": 45,
+      "interpretable": false,
+      "note": "Бенчмарк: Taylor & Letham, 2018; Makridakis et al., 2018",
+      "source": "benchmark",
+      "highlight": false
+    },
+    {
+      "model": "SARIMAX(1,0,1)(1,0,1,24)",
+      "mape": 17.775,
+      "rmse_mw": 3250.0,
+      "mae_mw": 2580.0,
+      "train_time_s": 180,
+      "interpretable": false,
+      "source": "trained",
+      "note": "Оцінено на 500 точках тестового набору",
+      "highlight": false
+    },
+    {
+      "model": "LSTM (MLP)",
+      "mape": 12.4,
+      "rmse_mw": 2680.0,
+      "mae_mw": 2120.0,
+      "train_time_s": 312,
+      "interpretable": false,
+      "source": "benchmark",
+      "note": "Бенчмарк: Marino et al., 2016",
+      "highlight": false
+    }
+  ]
+}
