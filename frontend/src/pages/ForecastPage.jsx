@@ -268,8 +268,6 @@ export default function ForecastPage() {
   const [cloud, setCloud]     = useState(40);
   const [isWeekend, setIsWeekend]       = useState(false);
   const [isHoliday, setIsHoliday]       = useState(false);
-  const [isPreHoliday, setIsPreHoliday] = useState(false);
-  const [isSchoolBreak, setIsSchoolBreak] = useState(false);
 
   const [phase, setPhase]   = useState('empty');
   const [result, setResult] = useState(null);
@@ -310,7 +308,7 @@ export default function ForecastPage() {
         start:    startISO,
         hours:    horizonHours,
         weather:  weatherData,
-        calendar: { is_weekend: isWeekend, is_holiday: isHoliday, is_pre_holiday: isPreHoliday, is_school_break: isSchoolBreak },
+        calendar: { is_weekend: isWeekend, is_holiday: isHoliday },
         weather_source: weatherSource,  // 'api' або 'manual'
       });
 
@@ -431,8 +429,6 @@ export default function ForecastPage() {
             <div className="flex flex-col gap-2.5">
               <Checkbox checked={isWeekend}     onChange={setIsWeekend}     label="Вихідний день" />
               <Checkbox checked={isHoliday}     onChange={setIsHoliday}     label="Державне свято" />
-              <Checkbox checked={isPreHoliday}  onChange={setIsPreHoliday}  label="Передсвятковий (скорочений)" />
-              <Checkbox checked={isSchoolBreak} onChange={setIsSchoolBreak} label="Шкільні канікули" />
             </div>
 
             {/* Кнопка */}
