@@ -286,7 +286,7 @@ async def analyze_decision(req: AnalyzeRequest):
     # Обчислюємо raw (ненормалізовані) ваги для відображення топ-5
     raw_weights = np.zeros(len(model["rules"]))
     for i, rule in enumerate(model["rules"]):
-        tl, hl, dl, sl, cl, wl, hol = (rule + [None]*7)[:7]
+        tl, hl, dl, sl, cl, wl, hol = (list(rule) + [None]*7)[:7]
         degs = []
         if tl:  degs.append(_membership_val("temp",    tl,  feats["temperature"]))
         if hl:  degs.append(_membership_val("hour",    hl,  feats["hour"]))
