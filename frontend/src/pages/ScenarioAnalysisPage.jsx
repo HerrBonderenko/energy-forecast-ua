@@ -14,6 +14,7 @@ import * as I from '../components/ui/Icons';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useScenarios } from '../contexts/ScenariosContext';
+import { getCurrentWeather } from '../lib/api';
 import {
   BASELINE_CURVE, FUZZY_RULES_SHORT, SENSITIVITIES,
 } from '../lib/mockData';
@@ -255,6 +256,31 @@ export default function ScenarioAnalysisPage() {
   const [dWind,  setDWind]  = useState(0);
   const [isWeekend,    setIsWeekend]    = useState(false);
   const [isHoliday,    setIsHoliday]    = useState(false);
+  const [baseline, setBaseline] = useState({
+    temperature: 8,
+    cloud_cover: 40,
+    date: new Date(),
+    weekday: new Date().getDay(),
+  });
+
+  // Завантаження реальної поточної погоди Києва
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentWeather()
+      .then((w) => {
+        if (cancelled || !w) return;
+        setBaseline({
+          temperature: w.temperature ?? 8,
+          cloud_cover: w.cloud_cover ?? 40,
+          date: new Date(),
+          weekday: new Date().getDay(),
+        });
+      })
+      .catch(() => {
+        // fallback на дефолтні значення
+      });
+    return () => { cancelled = true; };
+  }, []);
   const [saveOpen, setSaveOpen] = useState(false);
   const [loadOpen, setLoadOpen] = useState(false);
 
@@ -328,12 +354,20 @@ export default function ScenarioAnalysisPage() {
           <Card padding="p-4">
             <CardTitle className="text-sm mb-3">Базовий сценарій</CardTitle>
             <dl className="space-y-1.5 text-sm">
-              {[
-                ['Дата',        `9 травня 2026, 18:00`],
-                ['Тип дня',     'Робочий'],
-                ['Температура', '+8 °C'],
-                ['Хмарність',   '40 %'],
-              ].map(([k, v]) => (
+              {(() => {
+                const months = ['січня','лютого','березня','квітня','травня','червня','липня','серпня','вересня','жовтня','листопада','грудня'];
+                const d = baseline.date;
+                const dateStr = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${String(d.getHours()).padStart(2,'0')}:00`;
+                const isWknd = baseline.weekday === 0 || baseline.weekday === 6;
+                const dayLbl = isWknd ? 'Вихідний' : 'Робочий';
+                const tempSign = baseline.temperature >= 0 ? '+' : '';
+                return [
+                  ['Дата',        dateStr],
+                  ['Тип дня',     dayLbl],
+                  ['Температура', `${tempSign}${Math.round(baseline.temperature)} °C`],
+                  ['Хмарність',   `${Math.round(baseline.cloud_cover)} %`],
+                ];
+              })().map(([k, v]) => (
                 <div key={k} className="flex justify-between gap-3">
                   <dt className="text-slate-500 dark:text-slate-400">{k}</dt>
                   <dd className="font-medium font-mono tabular-nums text-slate-900 dark:text-slate-100">{v}</dd>
