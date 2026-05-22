@@ -15,9 +15,9 @@ import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useScenarios } from '../contexts/ScenariosContext';
 import { getCurrentWeather } from '../lib/api';
-import {
-  BASELINE_CURVE, FUZZY_RULES_SHORT, SENSITIVITIES,
-} from '../lib/mockData';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { BASELINE_CURVE } from '../lib/mockData';
 import { cx, fmtDecimal, applyWhatIf, NBSP } from '../lib/utils';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -153,11 +153,32 @@ function ComparisonChart({ computed }) {
 
 // ── Rules + Sensitivity ───────────────────────────────────────────────────────
 function RulesCard() {
+  const [rules, setRules] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/api/model/top-rules?limit=5`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) {
+          setRules(data.rules || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <Card padding="p-5">
       <CardTitle className="text-sm mb-3">Найвпливовіші правила</CardTitle>
       <div className="space-y-3">
-        {FUZZY_RULES_SHORT.map((r) => (
+        {loading ? (
+          <div className="text-xs text-slate-400">Завантаження…</div>
+        ) : rules.length === 0 ? (
+          <div className="text-xs text-slate-400">Немає даних</div>
+        ) : rules.map((r) => (
           <div key={r.id} className="flex items-start gap-2.5 py-0.5">
             <p className="flex-1 text-xs font-mono leading-relaxed text-slate-600 dark:text-slate-300">{r.text}</p>
             <Badge
@@ -174,12 +195,33 @@ function RulesCard() {
 }
 
 function SensitivityCard() {
+  const [factors, setFactors] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_BASE}/api/model/sensitivity`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) {
+          setFactors(data.factors || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <Card padding="p-5">
       <CardTitle className="text-sm mb-3">Чутливість до факторів</CardTitle>
       <div className="space-y-2.5">
-        {SENSITIVITIES.map((s, i) => (
-          <div key={s.feature} className="grid grid-cols-[100px_1fr] items-center gap-3">
+        {loading ? (
+          <div className="text-xs text-slate-400">Завантаження…</div>
+        ) : factors.length === 0 ? (
+          <div className="text-xs text-slate-400">Немає даних</div>
+        ) : factors.map((s, i) => (
+          <div key={s.feature} className="grid grid-cols-[120px_1fr] items-center gap-3">
             <div className="text-xs text-slate-600 dark:text-slate-300 truncate">{s.feature}</div>
             <div className="relative h-5 rounded-md bg-slate-100 dark:bg-slate-700/60 overflow-hidden">
               <div
