@@ -7,7 +7,6 @@ import {
 import * as I from '../components/ui/Icons';
 import { useToast } from '../contexts/ToastContext';
 import {
-  DATA_SOURCES, DATA_CACHE, AUTO_UPDATE_RULES,
   TRAINING_HISTORY, USERS, TECH_STACK, SOURCES_LINKS, SYSTEM_INFO,
 } from '../lib/mockData';
 import { cx } from '../lib/utils';
@@ -43,21 +42,69 @@ function Th({ children, right = false }) {
 // ── TAB 1: ДАНІ ──────────────────────────────────────────────────────────────
 function DataTab() {
   const { showToast } = useToast();
-  const [rules, setRules] = useState(
-    () => Object.fromEntries(AUTO_UPDATE_RULES.map((r) => [r.id, r.default])),
-  );
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef(null);
+  const [cacheData, setCacheData] = useState(null);
+  const [cacheLoading, setCacheLoading] = useState(true);
+  const [dataSources, setDataSources] = useState([]);
 
-  function handleFile(file) {
-    if (file) setUploadedFile({ name: file.name, size: file.size });
-  }
+  useEffect(() => {
+    // Завантажуємо реальну статистику з API
+    Promise.all([
+      fetch(`${API_BASE}/api/history/stats`).then((r) => r.json()).catch(() => null),
+      fetch(`${API_BASE}/api/scenarios/`).then((r) => r.json()).catch(() => null),
+      fetch(`${API_BASE}/api/model/info`).then((r) => r.json()).catch(() => null),
+    ]).then(([histStats, scenariosData, modelInfo]) => {
+      const now = new Date().toLocaleDateString('uk-UA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      // Статус джерел даних з реального API
+      setDataSources([
+        {
+          id: 'entsoe', name: 'ENTSO-E Transparency Platform',
+          description: 'Дані споживання та генерації',
+          status: modelInfo?.data_sources?.consumption?.status === 'connected' ? 'connected' : 'pending',
+          lastUpdate: modelInfo?.training_date ? modelInfo.training_date + 'T00:00:00Z' : null,
+        },
+        {
+          id: 'openmeteo', name: 'Open-Meteo API',
+          description: 'Історична та поточна погода',
+          status: 'connected',
+          lastUpdate: new Date().toISOString(),
+        },
+        {
+          id: 'manual', name: 'Ручне завантаження',
+          description: 'Імпорт CSV/Excel файлів',
+          status: 'idle',
+          lastUpdate: null,
+        },
+      ]);
 
-  function startImport() {
-    showToast({ type: 'success', title: 'Імпорт розпочато', description: uploadedFile.name });
-    setTimeout(() => setUploadedFile(null), 500);
-  }
+      setCacheData([
+        {
+          sourceName: 'Прогнози (SQLite)',
+          coverage:   'Поточна сесія',
+          records:    histStats?.total ?? '—',
+          lastUpdated: now,
+        },
+        {
+          sourceName: 'Сценарії (SQLite)',
+          coverage:   'Всі сесії',
+          records:    scenariosData?.items?.length ?? '—',
+          lastUpdated: now,
+        },
+        {
+          sourceName: 'Модель ANFIS',
+          coverage:   `2017–2021 (${43794} год.)`,
+          records:    modelInfo?.rules_count ?? '—',
+          lastUpdated: modelInfo?.training_date ?? '—',
+        },
+        {
+          sourceName: 'Open-Meteo API',
+          coverage:   'Поточна погода Київ',
+          records:    '24',
+          lastUpdated: now,
+        },
+      ]);
+      setCacheLoading(false);
+    });
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -70,9 +117,8 @@ function DataTab() {
         </div>
         <CardBody>
           <ul className="divide-y divide-slate-200 dark:divide-slate-700/60 -mx-1">
-            {DATA_SOURCES.map((s) => (
+            {(dataSources.length ? dataSources : []).map((s) => (
               <li key={s.id} className="flex flex-wrap items-start sm:items-center gap-3 py-3 px-1">
-                {/* Назва + статус-крапка */}
                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
                   <StatusDot tone={s.status === 'connected' ? 'green' : s.status === 'error' ? 'red' : 'amber'} />
                   <div className="min-w-0">
@@ -80,7 +126,6 @@ function DataTab() {
                     <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{s.description}</div>
                   </div>
                 </div>
-                {/* Дата + бейдж + кнопка — переносяться на новий рядок на sm */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
                     {s.lastUpdate ? new Date(s.lastUpdate).toLocaleDateString('uk-UA', { day: 'numeric', month: 'short' }) : 'не використовується'}
@@ -99,54 +144,6 @@ function DataTab() {
         </CardBody>
       </Card>
 
-      {/* Імпорт */}
-      <Card>
-        <div className="px-5 pt-5 pb-3">
-          <CardTitle>Імпорт даних</CardTitle>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Завантажте файл CSV або Excel</p>
-        </div>
-        <CardBody>
-          {!uploadedFile ? (
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files?.[0]); }}
-              className={cx(
-                'border-2 border-dashed rounded-lg py-10 px-4 text-center transition-colors cursor-pointer',
-                dragOver
-                  ? 'border-blue-500 bg-blue-50/40 dark:bg-blue-900/10'
-                  : 'border-slate-300 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500',
-              )}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
-                  <I.Upload size={18} className="text-slate-400" />
-                </div>
-                <p className="text-sm text-slate-600 dark:text-slate-300">
-                  Перетягніть або{' '}
-                  <span className="text-blue-600 dark:text-blue-400 font-medium">оберіть файл</span>
-                </p>
-                <p className="text-xs text-slate-400">.csv, .xlsx, .xls</p>
-              </div>
-              <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
-            </div>
-          ) : (
-            <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 flex flex-wrap items-center gap-3">
-              <div className="w-10 h-10 rounded bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                <I.FileText size={18} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{uploadedFile.name}</div>
-                <div className="text-xs text-slate-500">{(uploadedFile.size / 1024).toFixed(1)} КБ</div>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setUploadedFile(null)}>Видалити</Button>
-              <Button variant="primary" size="sm" leftIcon={<I.Upload size={14} />} onClick={startImport}>Імпортувати</Button>
-            </div>
-          )}
-        </CardBody>
-      </Card>
-
       {/* Кеш — таблиця з горизонтальним скролом */}
       <Card>
         <div className="px-5 pt-5 pb-3">
@@ -161,25 +158,19 @@ function DataTab() {
                 <Th>Покриття</Th>
                 <Th>Записів</Th>
                 <Th>Оновлено</Th>
-                <Th right> </Th>
+                
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60">
-              {DATA_CACHE.map((r, i) => (
+              {cacheLoading ? (
+                <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">Завантаження…</td></tr>
+              ) : (cacheData || []).map((r, i) => (
                 <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                   <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-100 whitespace-nowrap">{r.sourceName}</td>
                   <td className="px-4 py-3 text-xs font-mono text-slate-600 dark:text-slate-300 whitespace-nowrap">{r.coverage}</td>
                   <td className="px-4 py-3 tabular-nums text-slate-600 dark:text-slate-300 whitespace-nowrap">{r.records}</td>
                   <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{r.lastUpdated}</td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <Button
-                      variant="secondary" size="sm"
-                      leftIcon={r.action.startsWith('Оновити') ? <I.RefreshCw size={13} /> : <I.Trash2 size={13} />}
-                      onClick={() => showToast({ type: 'success', title: r.action, description: r.sourceName })}
-                    >
-                      {r.action.startsWith('Оновити') ? 'Оновити' : 'Очистити'}
-                    </Button>
-                  </td>
+
                 </tr>
               ))}
             </tbody>
@@ -187,27 +178,6 @@ function DataTab() {
         </div>
       </Card>
 
-      {/* Автооновлення */}
-      <Card>
-        <div className="px-5 pt-5 pb-3">
-          <CardTitle>Розклад автооновлення</CardTitle>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Фонове оновлення даних</p>
-        </div>
-        <CardBody>
-          <ul className="divide-y divide-slate-200 dark:divide-slate-700/60">
-            {AUTO_UPDATE_RULES.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-3 py-3">
-                <span className="text-sm text-slate-700 dark:text-slate-300">{r.label}</span>
-                <Switch
-                  checked={rules[r.id]}
-                  onChange={(v) => setRules((s) => ({ ...s, [r.id]: v }))}
-                />
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Останнє виконання: 8 трав, 14:00</p>
-        </CardBody>
-      </Card>
     </div>
   );
 }
@@ -516,7 +486,7 @@ function UsersTab() {
                 <Th>Email</Th>
                 <Th>Роль</Th>
                 <Th>Останній вхід</Th>
-                <Th right> </Th>
+                
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60">
