@@ -1,30 +1,30 @@
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, memo, useEffect } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip as RTooltip, ResponsiveContainer, ReferenceLine,
+  Tooltip as RTooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-  Card, CardBody, CardTitle, Badge, Button, IconButton,
-  SectionHeader, Input, Select, Skeleton,
+  Card, Badge, Button, IconButton,
+  SectionHeader, Input, Select, Spinner,
 } from '../components/ui';
 import * as I from '../components/ui/Icons';
 import { useToast } from '../contexts/ToastContext';
-import {
-  HISTORY_FORECASTS, HISTORY_BEST, HISTORY_WORST, HISTORY_AVG_MAPE,
-  PRECIPITATION_LABELS_UK,
-} from '../lib/mockData';
-import { cx, fmtDecimal, NBSP } from '../lib/utils';
+import { cx, fmtDecimal } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
+import { getHistory } from '../lib/api';
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function qualityTone(q) {
-  return q === 'excellent' ? 'green' : q === 'good' ? 'yellow' : q === 'poor' ? 'red' : 'slate';
+  return q === 'excellent' ? 'green' : q === 'good' ? 'yellow' : q === 'acceptable' ? 'slate' : 'slate';
 }
 function qualityLabel(q) {
-  return q === 'excellent' ? 'Відмінно' : q === 'good' ? 'Добре' : q === 'poor' ? 'Погано' : '—';
+  return q === 'excellent' ? 'Відмінно' : q === 'good' ? 'Добре' : q === 'acceptable' ? 'Прийнятно' : '—';
 }
 function horizonLabel(h) {
-  return h === '1h' ? '+1 год' : h === '24h' ? '+24 год' : '+7 днів';
+  const map = { '1h': '+1 год', '6h': '+6 год', '24h': '+24 год', '48h': '+48 год', '7d': '+7 днів' };
+  return map[h] || h;
 }
 function fmtIso(iso) {
   if (!iso) return '—';
@@ -62,75 +62,91 @@ function SummaryCard({ label, value, sub, tone = 'slate' }) {
   );
 }
 
-// ── Mini area chart inside expanded row ───────────────────────────────────────
-function MiniForecastChart({ forecast }) {
+// ── Mini area chart ───────────────────────────────────────────────────────────
+function MiniForecastChart({ points }) {
   const { theme } = useTheme();
   const dark = theme === 'dark';
-  const pts = forecast.predictedValues?.slice(0, 24) || [];
-  if (!pts.length) return <div className="h-32 flex items-center justify-center text-sm text-slate-400">Немає даних</div>;
-  const data = pts.map((p, i) => ({
+  if (!points || !points.length) return <div className="h-32 flex items-center justify-center text-sm text-slate-400">Немає даних</div>;
+  const data = points.slice(0, 48).map((p, i) => ({
     i,
-    forecast: +p.forecast?.toFixed(2),
-    actual: p.actual != null ? +p.actual.toFixed(2) : undefined,
+    forecast: +Number(p.forecast).toFixed(2),
+    lower:    +Number(p.lower_bound).toFixed(2),
+    upper:    +Number(p.upper_bound).toFixed(2),
   }));
   return (
-    <ResponsiveContainer width="100%" height={120}>
+    <ResponsiveContainer width="100%" height={140}>
       <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
         <defs>
           <linearGradient id="fcGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="#2563EB" stopOpacity={0.15} />
+            <stop offset="5%"  stopColor="#2563EB" stopOpacity={0.2} />
             <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke={dark ? '#1e293b' : '#f1f5f9'} />
-        <XAxis dataKey="i" tick={false} axisLine={false} tickLine={false} />
+        <XAxis dataKey="i" tick={{ fontSize: 10, fill: dark ? '#94a3b8' : '#94a3b8' }} axisLine={false} tickLine={false} />
         <YAxis tick={{ fontSize: 10, fill: dark ? '#94a3b8' : '#94a3b8' }} axisLine={false} tickLine={false} width={36} />
         <RTooltip
           contentStyle={{ background: dark ? '#1e293b' : '#fff', border: 'none', borderRadius: 6, fontSize: 12 }}
           labelFormatter={(i) => `Год ${i}`}
-          formatter={(v, name) => [v?.toFixed ? `${v.toFixed(2)} ГВт` : v, name === 'forecast' ? 'Прогноз' : 'Факт']}
+          formatter={(v) => [v?.toFixed ? `${v.toFixed(2)} ГВт` : v, 'Прогноз']}
         />
         <Area type="monotone" dataKey="forecast" stroke="#2563EB" strokeWidth={1.5} fill="url(#fcGrad)" dot={false} />
-        {data.some((d) => d.actual != null) && (
-          <Area type="monotone" dataKey="actual" stroke="#10b981" strokeWidth={1.5} fill="none" dot={false} />
-        )}
       </AreaChart>
     </ResponsiveContainer>
   );
 }
 
-// ── Expanded row detail ────────────────────────────────────────────────────────
-function ExpandedDetail({ forecast }) {
+// ── Expanded detail ───────────────────────────────────────────────────────────
+function ExpandedDetail({ forecastId }) {
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(true);
   const { showToast } = useToast();
-  const w = forecast.inputs?.weather || {};
-  const cal = forecast.inputs?.calendar || {};
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API_BASE}/api/history/${forecastId}`)
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((data) => { setDetail(data); setLoading(false); })
+      .catch(() => { setLoading(false); });
+  }, [forecastId]);
+
+  if (loading) {
+    return (
+      <div className="px-4 py-6 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-700 flex justify-center">
+        <Spinner size={20} />
+      </div>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <div className="px-4 py-6 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-700 text-sm text-slate-500 text-center">
+        Не вдалося завантажити деталі
+      </div>
+    );
+  }
+
+  const w = detail.weather || {};
+  const cal = detail.calendar || {};
+
   return (
     <div className="px-4 pb-4 pt-2 bg-slate-50 dark:bg-slate-900/40 border-t border-slate-200 dark:border-slate-700 space-y-4">
-      {/* Графік */}
       <div>
         <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-          Крива прогнозу
+          Крива прогнозу ({detail.points?.length || 0} точок)
         </div>
-        <MiniForecastChart forecast={forecast} />
-        <div className="flex items-center gap-4 mt-1">
-          <span className="flex items-center gap-1 text-xs text-slate-500"><span className="inline-block w-3 h-0.5 bg-blue-500 rounded" />Прогноз</span>
-          <span className="flex items-center gap-1 text-xs text-slate-500"><span className="inline-block w-3 h-0.5 bg-emerald-500 rounded" />Факт</span>
-        </div>
+        <MiniForecastChart points={detail.points} />
       </div>
 
-      {/* Вхідні умови — 2 колонки на sm+ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Погода */}
         <div>
-          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Погода</div>
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Погода (вхід)</div>
           <dl className="space-y-1.5 text-sm">
             {[
-              ['Температура', `${w.temperature?.toFixed(1)} °C`],
-              ['Хмарність',   `${w.cloudCover} %`],
-              ['Вітер',       `${w.windSpeed?.toFixed(1)} м/с`],
-              ['Вологість',   `${w.humidity} %`],
-              ['Тиск',        `${w.pressure} гПа`],
-              ['Опади',       PRECIPITATION_LABELS_UK[w.precipitation] || '—'],
+              ['Температура', w.temperature != null ? `${Number(w.temperature).toFixed(1)} °C` : '—'],
+              ['Хмарність',   w.cloud_cover != null ? `${w.cloud_cover} %` : '—'],
+              ['Вітер',       w.wind_speed != null ? `${Number(w.wind_speed).toFixed(1)} м/с` : '—'],
+              ['Джерело',     detail.weather_source === 'manual' ? 'Задано вручну' : detail.weather_source === 'hourly' ? 'API погодинно' : detail.weather_source === 'fallback' ? 'Резервне' : '—'],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-3">
                 <dt className="text-slate-500 dark:text-slate-400">{k}</dt>
@@ -139,14 +155,14 @@ function ExpandedDetail({ forecast }) {
             ))}
           </dl>
         </div>
-        {/* Календар */}
         <div>
-          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Тип дня</div>
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Параметри</div>
           <dl className="space-y-1.5 text-sm">
             {[
-              ['Година старту', `${String(cal.hourOfDay || 0).padStart(2,'0')}:00`],
-              ['Тип дня', cal.isHoliday ? 'Свято' : cal.isPreHoliday ? 'Передсвятковий' : cal.isWeekend ? 'Вихідний' : 'Робочий'],
-              ['Шкільні канікули', cal.isSchoolBreak ? 'Так' : 'Ні'],
+              ['Початок', fmtIso(detail.start_time)],
+              ['Горизонт', detail.horizon_label],
+              ['Тип дня', cal.is_holiday ? 'Свято' : cal.is_weekend ? 'Вихідний' : 'Робочий'],
+              ['Модель', `${detail.model_version} (MAPE ${detail.model_mape}%)`],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between gap-3">
                 <dt className="text-slate-500 dark:text-slate-400">{k}</dt>
@@ -154,36 +170,28 @@ function ExpandedDetail({ forecast }) {
               </div>
             ))}
           </dl>
-
-          {/* Аналіз */}
-          {forecast.analysis && (
-            <div className="mt-4 p-3 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              {forecast.analysis}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Кнопки дій */}
-      <div className="flex flex-wrap gap-2 pt-1">
-        <Button variant="secondary" size="sm" leftIcon={<I.TrendingUp size={13} />}
-          onClick={() => showToast({ type: 'info', title: 'Перейти до Прогнозу', description: 'Буде реалізовано на Етапі 5' })}>
-          Повторити прогноз
-        </Button>
-        <Button variant="ghost" size="sm" leftIcon={<I.Network size={13} />}
-          onClick={() => showToast({ type: 'info', title: 'Перейти до Інтерпретації', description: 'Буде реалізовано на Етапі 5' })}>
-          Інтерпретація
-        </Button>
-        <Button variant="ghost" size="sm" leftIcon={<I.Download size={13} />}
-          onClick={() => showToast({ type: 'success', title: 'CSV готовий для скачування' })}>
-          Завантажити CSV
-        </Button>
+      <div className="grid grid-cols-3 gap-2 pt-2">
+        <div className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 text-center">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500">Середнє</div>
+          <div className="text-base font-semibold tabular-nums mt-0.5">{fmtGW(detail.avg_gw)}</div>
+        </div>
+        <div className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 text-center">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500">Пік</div>
+          <div className="text-base font-semibold tabular-nums mt-0.5">{fmtGW(detail.max_gw)}</div>
+        </div>
+        <div className="rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 text-center">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500">Мінімум</div>
+          <div className="text-base font-semibold tabular-nums mt-0.5">{fmtGW(detail.min_gw)}</div>
+        </div>
       </div>
     </div>
   );
 }
 
-// ── History row (expandable) ──────────────────────────────────────────────────
+// ── History row ───────────────────────────────────────────────────────────────
 const HistoryRow = memo(function HistoryRow({ forecast: f, expanded, onToggle }) {
   return (
     <>
@@ -194,44 +202,29 @@ const HistoryRow = memo(function HistoryRow({ forecast: f, expanded, onToggle })
         )}
         onClick={() => onToggle(f.id)}
       >
-        {/* Дата */}
         <td className="px-4 py-3 whitespace-nowrap">
-          <div className="text-sm text-slate-800 dark:text-slate-100 tabular-nums">{fmtIso(f.startTime)}</div>
-          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{f.modelVersion}</div>
+          <div className="text-sm text-slate-800 dark:text-slate-100 tabular-nums">{fmtIso(f.created_at)}</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{f.model_version}</div>
         </td>
-        {/* Горизонт */}
         <td className="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
           <Badge tone="slate">{horizonLabel(f.horizon)}</Badge>
         </td>
-        {/* Джерело */}
         <td className="px-4 py-3 whitespace-nowrap hidden md:table-cell">
-          <span className="text-xs text-slate-500 dark:text-slate-400">{f.source === 'auto' ? 'Авто' : 'Ручний'}</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400">
+            {f.source === 'auto' ? 'Авто' : 'Ручний'}
+          </span>
         </td>
-        {/* Прогноз / Факт */}
         <td className="px-4 py-3 whitespace-nowrap hidden lg:table-cell">
-          <div className="text-sm tabular-nums text-slate-800 dark:text-slate-100">{fmtGW(f.avgForecast)}</div>
-          {f.avgActual != null && (
-            <div className="text-xs tabular-nums text-slate-500 dark:text-slate-400 mt-0.5">
-              факт: {fmtGW(f.avgActual)}
-            </div>
-          )}
+          <div className="text-sm tabular-nums text-slate-800 dark:text-slate-100">{fmtGW(f.avg_forecast)}</div>
+          <div className="text-xs tabular-nums text-slate-500 dark:text-slate-400 mt-0.5">
+            мін: {fmtGW(f.min_forecast)} · макс: {fmtGW(f.max_forecast)}
+          </div>
         </td>
-        {/* MAPE */}
         <td className="px-4 py-3 whitespace-nowrap">
-          {f.mape != null ? (
-            <span className={cx(
-              'text-sm font-semibold tabular-nums',
-              f.quality === 'excellent' ? 'text-emerald-600 dark:text-emerald-400'
-              : f.quality === 'good' ? 'text-amber-600 dark:text-amber-400'
-              : 'text-red-600 dark:text-red-400',
-            )}>
-              {fmtMape(f.mape)}
-            </span>
-          ) : (
-            <span className="text-xs text-slate-400">очікується</span>
-          )}
+          <span className="text-sm font-semibold tabular-nums text-blue-600 dark:text-blue-400">
+            {fmtMape(f.model_mape)}
+          </span>
         </td>
-        {/* Якість */}
         <td className="px-4 py-3 whitespace-nowrap hidden sm:table-cell">
           {f.quality ? (
             <Badge tone={qualityTone(f.quality)}>{qualityLabel(f.quality)}</Badge>
@@ -239,7 +232,6 @@ const HistoryRow = memo(function HistoryRow({ forecast: f, expanded, onToggle })
             <span className="text-xs text-slate-400">—</span>
           )}
         </td>
-        {/* Шеврон */}
         <td className="px-4 py-3 text-right">
           <I.ChevronRight
             size={16}
@@ -253,7 +245,7 @@ const HistoryRow = memo(function HistoryRow({ forecast: f, expanded, onToggle })
       {expanded && (
         <tr>
           <td colSpan={7} className="p-0">
-            <ExpandedDetail forecast={f} />
+            <ExpandedDetail forecastId={f.id} />
           </td>
         </tr>
       )}
@@ -277,7 +269,9 @@ function FilterBar({ search, setSearch, horizon, setHorizon, quality, setQuality
         options={[
           { value: 'all', label: 'Будь-який горизонт' },
           { value: '1h',  label: '+1 година' },
+          { value: '6h',  label: '+6 годин' },
           { value: '24h', label: '+24 години' },
+          { value: '48h', label: '+48 годин' },
           { value: '7d',  label: '+7 днів' },
         ]}
       />
@@ -285,10 +279,10 @@ function FilterBar({ search, setSearch, horizon, setHorizon, quality, setQuality
         value={quality}
         onChange={(v) => setQuality(v)}
         options={[
-          { value: 'all',       label: 'Будь-яка якість' },
-          { value: 'excellent', label: 'Відмінна (< 2 %)' },
-          { value: 'good',      label: 'Хороша (2–5 %)' },
-          { value: 'poor',      label: 'Погана (> 5 %)' },
+          { value: 'all',        label: 'Будь-яка якість' },
+          { value: 'excellent',  label: 'Відмінна' },
+          { value: 'good',       label: 'Добра' },
+          { value: 'acceptable', label: 'Прийнятна' },
         ]}
       />
       <div className="flex items-center gap-2">
@@ -308,39 +302,58 @@ function Pagination({ page, pageCount, onPage }) {
   if (pageCount <= 1) return null;
   return (
     <div className="flex items-center justify-between gap-3 flex-wrap">
-      <Button
-        variant="ghost" size="sm"
-        leftIcon={<I.ChevronLeft size={14} />}
-        disabled={page === 0}
-        onClick={() => onPage(page - 1)}
-      >
+      <Button variant="ghost" size="sm" leftIcon={<I.ChevronLeft size={14} />}
+        disabled={page === 0} onClick={() => onPage(page - 1)}>
         Попередня
       </Button>
       <span className="text-sm text-slate-500 dark:text-slate-400 tabular-nums">
         {page + 1} / {pageCount}
       </span>
-      <Button
-        variant="ghost" size="sm"
-        rightIcon={<I.ChevronRight size={14} />}
-        disabled={page === pageCount - 1}
-        onClick={() => onPage(page + 1)}
-      >
+      <Button variant="ghost" size="sm" rightIcon={<I.ChevronRight size={14} />}
+        disabled={page === pageCount - 1} onClick={() => onPage(page + 1)}>
         Наступна
       </Button>
     </div>
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 20;
 
 export default function HistoryPage() {
   const { showToast } = useToast();
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch]   = useState('');
   const [horizon, setHorizon] = useState('all');
   const [quality, setQuality] = useState('all');
   const [page, setPage]       = useState(0);
   const [expandedId, setExpandedId] = useState(null);
+
+  // Завантажуємо з API
+  useEffect(() => {
+    setLoading(true);
+    getHistory({ days: 30, limit: 100 })
+      .then((data) => {
+        setItems(data.items || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        showToast({ type: 'error', title: 'Помилка завантаження історії', description: err.message });
+        setLoading(false);
+      });
+  }, []);
+
+  function refresh() {
+    setLoading(true);
+    getHistory({ days: 30, limit: 100 })
+      .then((data) => {
+        setItems(data.items || []);
+        setLoading(false);
+        showToast({ type: 'success', title: 'Історію оновлено' });
+      })
+      .catch(() => setLoading(false));
+  }
 
   function handleToggle(id) {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -350,62 +363,45 @@ export default function HistoryPage() {
     setSearch(''); setHorizon('all'); setQuality('all'); setPage(0); setExpandedId(null);
   }
 
-  // Фільтрація
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return HISTORY_FORECASTS.filter((f) => {
-      if (search && !fmtIso(f.startTime).toLowerCase().includes(q) && !(f.modelVersion || '').toLowerCase().includes(q)) return false;
+    return items.filter((f) => {
+      if (search && !fmtIso(f.created_at).toLowerCase().includes(q) && !(f.model_version || '').toLowerCase().includes(q)) return false;
       if (horizon !== 'all' && f.horizon !== horizon) return false;
       if (quality !== 'all' && f.quality !== quality) return false;
       return true;
     });
-  }, [search, horizon, quality]);
+  }, [items, search, horizon, quality]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage  = Math.min(page, pageCount - 1);
   const pageData  = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
+  // Statistics
+  const avgMape = items.length ? items.reduce((s, f) => s + (f.model_mape || 0), 0) / items.length : null;
+  const totalSaved = items.length;
+  const manualCount = items.filter((i) => i.source === 'manual').length;
+  const autoCount = totalSaved - manualCount;
+
   return (
     <div className="space-y-5">
       <SectionHeader
         title="Історія прогнозів"
-        subtitle="Журнал усіх запусків моделі — фактичні та прогнозовані значення"
+        subtitle="Журнал усіх збережених прогнозів з реальної SQLite БД"
         right={
-          <Button variant="ghost" size="sm" leftIcon={<I.Download size={14} />}
-            onClick={() => showToast({ type: 'success', title: 'Експорт підготовано' })}>
-            Експорт CSV
+          <Button variant="ghost" size="sm" leftIcon={<I.RefreshCw size={14} />} onClick={refresh}>
+            Оновити
           </Button>
         }
       />
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <SummaryCard
-          label="Середній MAPE"
-          value={fmtMape(HISTORY_AVG_MAPE)}
-          sub={`${HISTORY_FORECASTS.filter((f) => f.mape != null).length} оцінених прогнозів`}
-          tone="blue"
-        />
-        <SummaryCard
-          label="Найкращий прогноз"
-          value={fmtMape(HISTORY_BEST?.mape)}
-          sub={HISTORY_BEST ? fmtIso(HISTORY_BEST.startTime) : '—'}
-          tone="green"
-        />
-        <SummaryCard
-          label="Найгірший прогноз"
-          value={fmtMape(HISTORY_WORST?.mape)}
-          sub={HISTORY_WORST ? fmtIso(HISTORY_WORST.startTime) : '—'}
-          tone="red"
-        />
-        <SummaryCard
-          label="Всього записів"
-          value={HISTORY_FORECASTS.length.toString()}
-          sub="за останні 30 днів"
-        />
+        <SummaryCard label="Всього записів" value={totalSaved.toString()} sub="за останні 30 днів" />
+        <SummaryCard label="Середній MAPE моделі" value={fmtMape(avgMape)} sub={`${totalSaved} прогнозів`} tone="blue" />
+        <SummaryCard label="Авто (API)" value={autoCount.toString()} sub="з Open-Meteo" tone="green" />
+        <SummaryCard label="Ручні" value={manualCount.toString()} sub="задані вручну" />
       </div>
 
-      {/* Фільтри */}
       <FilterBar
         search={search} setSearch={setSearch}
         horizon={horizon} setHorizon={setHorizon}
@@ -414,38 +410,33 @@ export default function HistoryPage() {
         count={filtered.length}
       />
 
-      {/* Таблиця з горизонтальним скролом */}
       <Card>
         <div className="overflow-x-auto">
           <table className="min-w-[480px] w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Дата і час
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden sm:table-cell">
-                  Горизонт
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden md:table-cell">
-                  Джерело
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden lg:table-cell">
-                  ГВт (прогноз / факт)
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  MAPE
-                </th>
-                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden sm:table-cell">
-                  Якість
-                </th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Дата і час</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden sm:table-cell">Горизонт</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden md:table-cell">Джерело</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden lg:table-cell">Прогноз (середнє)</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">MAPE моделі</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden sm:table-cell">Якість</th>
                 <th className="px-4 py-2.5 w-8" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60">
-              {pageData.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center">
+                    <Spinner size={24} />
+                  </td>
+                </tr>
+              ) : pageData.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
-                    За вашими фільтрами нічого не знайдено
+                    {items.length === 0
+                      ? 'Поки немає збережених прогнозів. Створіть прогноз на сторінці «Прогноз».'
+                      : 'За вашими фільтрами нічого не знайдено'}
                   </td>
                 </tr>
               ) : (
@@ -462,7 +453,6 @@ export default function HistoryPage() {
           </table>
         </div>
 
-        {/* Пагінація */}
         {pageCount > 1 && (
           <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700">
             <Pagination page={safePage} pageCount={pageCount} onPage={(p) => { setPage(p); setExpandedId(null); }} />
@@ -472,5 +462,3 @@ export default function HistoryPage() {
     </div>
   );
 }
-
-
