@@ -233,12 +233,38 @@ async def analyze_decision(req: AnalyzeRequest):
     except Exception:
         raise _HE(status_code=400, detail="Невірний формат дати/часу")
 
-    # Погода
+    # Погода — залежно від дати
+    now = dt_mod.datetime.utcnow()
+    days_diff = (dt.date() - now.date()).days
+    TEMP_BY_MONTH  = {1:-3,2:-2,3:3,4:11,5:18,6:22,7:24,8:23,9:17,10:10,11:4,12:-1}
+    CLOUD_BY_MONTH = {1:70,2:65,3:60,4:55,5:50,6:45,7:40,8:42,9:55,10:65,11:75,12:75}
+    WIND_BY_MONTH  = {1:6,2:6,3:7,4:6,5:5,6:4,7:4,8:4,9:5,10:6,11:6,12:6}
+
+    weather_source_label = "Open-Meteo API"
     try:
-        from app.services.openmeteo_client import fetch_current_weather
-        w = await fetch_current_weather()
+        if days_diff <= 0:
+            # Минуле або сьогодні — поточна погода
+            from app.services.openmeteo_client import fetch_current_weather
+            w = await fetch_current_weather()
+            weather_source_label = "Open-Meteo (поточна)"
+        elif days_diff <= 8:
+            # Найближчі 8 днів — прогноз погодинно
+            from app.services.openmeteo_client import fetch_forecast_weather
+            hours_ahead = days_diff * 24 + dt.hour
+            forecast_list = await fetch_forecast_weather(hours=min(hours_ahead + 1, 192))
+            if forecast_list and len(forecast_list) > hours_ahead:
+                wf = forecast_list[hours_ahead]
+                w = {"temperature": wf.get("temperature"), "cloud_cover": wf.get("cloud_cover"), "wind_speed": wf.get("wind_speed")}
+            else:
+                w = {"temperature": TEMP_BY_MONTH[dt.month], "cloud_cover": CLOUD_BY_MONTH[dt.month], "wind_speed": WIND_BY_MONTH[dt.month]}
+            weather_source_label = "Open-Meteo (прогноз)"
+        else:
+            # Далеке майбутнє — сезонне середнє
+            w = {"temperature": TEMP_BY_MONTH[dt.month], "cloud_cover": CLOUD_BY_MONTH[dt.month], "wind_speed": WIND_BY_MONTH[dt.month]}
+            weather_source_label = "Сезонне середнє"
     except Exception:
-        w = {"temperature": 10.0, "cloud_cover": 50.0, "wind_speed": 5.0}
+        w = {"temperature": TEMP_BY_MONTH[dt.month], "cloud_cover": CLOUD_BY_MONTH[dt.month], "wind_speed": WIND_BY_MONTH[dt.month]}
+        weather_source_label = "Сезонне середнє (fallback)"
 
     # Календар
     weekday = dt.weekday()
@@ -257,18 +283,33 @@ async def analyze_decision(req: AnalyzeRequest):
         "is_holiday":  is_holiday,
     }
 
+    # Обчислюємо raw (ненормалізовані) ваги для відображення топ-5
+    raw_weights = np.zeros(len(model["rules"]))
+    for i, rule in enumerate(model["rules"]):
+        tl, hl, dl, sl, cl, wl, hol = (rule + [None]*7)[:7]
+        degs = []
+        if tl:  degs.append(_membership_val("temp",    tl,  feats["temperature"]))
+        if hl:  degs.append(_membership_val("hour",    hl,  feats["hour"]))
+        if dl:  degs.append(_membership_val("day",     dl,  feats["is_weekend"]))
+        if sl:  degs.append(_membership_val("season",  sl,  feats["month"]))
+        if cl:  degs.append(_membership_val("cloud",   cl,  feats["cloud_cover"]))
+        if wl:  degs.append(_membership_val("wind",    wl,  feats["wind_speed"]))
+        if hol: degs.append(_membership_val("holiday", hol, feats["is_holiday"]))
+        raw_weights[i] = min(degs) if degs else 0.0
+
     weights = _compute_weights(feats)
     consequents = np.array(model["consequents"])
     rules = model["rules"]
     base = model.get("base_load_mean", 16.774)
     intercept = model.get("intercept", -1.529)
 
-    # Внески кожного правила
+    # Внески кожного правила (нормалізовані для прогнозу)
     contributions = weights * consequents
     forecast = base + intercept + contributions.sum()
 
-    # Топ-5 за вагою
-    top_idx = np.argsort(weights)[::-1][:5]
+    # Топ-5 за RAW вагою (щоб бачити реальну силу кожного правила)
+    top_idx = np.argsort(raw_weights)[::-1][:5]
+    max_raw = max(raw_weights.max(), 1e-6)
 
     names_7 = ["температура", "час", "день", "сезон", "хмарність", "вітер", "свято"]
     top_rules = []
@@ -276,13 +317,13 @@ async def analyze_decision(req: AnalyzeRequest):
         rule = rules[idx]
         parts = [f"{names_7[j]}={label}" for j, label in enumerate(rule) if label and j < 7]
         contrib_gw = float(contributions[idx])
-        # Зсунутий внесок (для відображення на графіку): від базової лінії
-        display_contrib = base / 5 + contrib_gw  # розподіляємо базу між топ-5
+        display_contrib = base / 5 + contrib_gw
         top_rules.append({
-            "id":           int(idx) + 1,
-            "condition":    " І ".join(parts),
-            "weight":       round(float(weights[idx]), 3),
-            "consequent":   round(float(consequents[idx]), 3),
+            "id":              int(idx) + 1,
+            "condition":       " І ".join(parts) if parts else "(базовий рівень)",
+            "weight":          round(float(raw_weights[idx]) / max_raw, 3),  # відносна сила
+            "raw_weight":      round(float(raw_weights[idx]), 4),
+            "consequent":      round(float(consequents[idx]), 3),
             "contribution_gw": round(display_contrib, 2),
         })
 
@@ -301,6 +342,7 @@ async def analyze_decision(req: AnalyzeRequest):
             "weekday":      weekday_name,
             "day_type":     day_type,
             "season":       season.capitalize(),
+            "weather_source": weather_source_label,
         },
         "forecast_gw": round(forecast, 2),
         "active_rules": top_rules,
