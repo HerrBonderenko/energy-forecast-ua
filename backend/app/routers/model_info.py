@@ -273,8 +273,6 @@ async def analyze_decision(req: AnalyzeRequest):
     names_7 = ["температура", "час", "день", "сезон", "хмарність", "вітер", "свято"]
     top_rules = []
     for idx in top_idx:
-        if weights[idx] <= 0:
-            continue
         rule = rules[idx]
         parts = [f"{names_7[j]}={label}" for j, label in enumerate(rule) if label and j < 7]
         contrib_gw = float(contributions[idx])
