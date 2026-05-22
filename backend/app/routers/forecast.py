@@ -28,7 +28,7 @@ class ForecastRequest(BaseModel):
     hours:    int = Field(24, ge=1, le=168)
     weather:  WeatherParams  = WeatherParams()
     calendar: CalendarParams = CalendarParams()
-    # Якщо фронтенд передає погодинну погоду — використовуємо її
+    weather_source: Optional[str] = Field("api", description="'api' (Open-Meteo) або 'manual' (значення зі слайдерів)")
     hourly_weather: Optional[List[dict]] = Field(None, description="Погодинна погода (список по годинах)")
 
 
@@ -69,27 +69,39 @@ async def create_forecast(req: ForecastRequest):
     """Створити прогноз споживання з погодинною погодою."""
     try:
         # 1. Визначаємо погоду для кожної години горизонту
-        hourly_weather = req.hourly_weather  # якщо фронтенд вже передав
+        hourly_weather = req.hourly_weather
 
-        if not hourly_weather:
-            # Намагаємось взяти погодинний прогноз з Open-Meteo
-            hourly_weather = await _fetch_hourly_weather(req.start, req.hours)
-
-        if not hourly_weather:
-            # Fallback: один snapshot для всіх годин
+        # MANUAL: користувач задав погоду вручну → використовуємо її для всіх годин
+        if req.weather_source == "manual":
             w = req.weather.model_dump()
-            try:
-                from app.services.openmeteo_client import fetch_current_weather
-                cur = await fetch_current_weather()
-                if cur:
-                    w = {
-                        "temperature": cur.get("temperature", w["temperature"]),
-                        "cloud_cover": cur.get("cloud_cover", w["cloud_cover"]),
-                        "wind_speed":  cur.get("wind_speed",  w["wind_speed"]),
-                    }
-            except Exception:
-                pass
-            hourly_weather = [w] * req.hours
+            hourly_weather = [{
+                "temperature": w["temperature"],
+                "cloud_cover": w["cloud_cover"],
+                "wind_speed":  w["wind_speed"],
+            }] * req.hours
+            weather_source_used = "manual"
+        elif not hourly_weather:
+            # API: тягнемо погодинний прогноз з Open-Meteo
+            hourly_weather = await _fetch_hourly_weather(req.start, req.hours)
+            weather_source_used = "hourly" if hourly_weather else "fallback"
+
+            if not hourly_weather:
+                # Останній fallback: snapshot з поточної погоди
+                w = req.weather.model_dump()
+                try:
+                    from app.services.openmeteo_client import fetch_current_weather
+                    cur = await fetch_current_weather()
+                    if cur:
+                        w = {
+                            "temperature": cur.get("temperature", w["temperature"]),
+                            "cloud_cover": cur.get("cloud_cover", w["cloud_cover"]),
+                            "wind_speed":  cur.get("wind_speed",  w["wind_speed"]),
+                        }
+                except Exception:
+                    pass
+                hourly_weather = [w] * req.hours
+        else:
+            weather_source_used = "hourly_provided"
 
         # Доповнюємо до потрібної кількості годин якщо бракує
         while len(hourly_weather) < req.hours:
@@ -125,7 +137,7 @@ async def create_forecast(req: ForecastRequest):
             },
             "model_version": model_info["version"],
             "model_mape":    model_info["metrics"]["mape"],
-            "weather_source": "hourly" if len(set(w.get("temperature",0) for w in hourly_weather)) > 1 else "snapshot",
+            "weather_source": weather_source_used,
         }
 
     except HTTPException:
