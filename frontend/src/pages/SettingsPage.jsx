@@ -68,12 +68,7 @@ function DataTab() {
           status: 'connected',
           lastUpdate: new Date().toISOString(),
         },
-        {
-          id: 'manual', name: 'Ручне завантаження',
-          description: 'Імпорт CSV/Excel файлів',
-          status: 'idle',
-          lastUpdate: null,
-        },
+
       ]);
 
       setCacheData([
