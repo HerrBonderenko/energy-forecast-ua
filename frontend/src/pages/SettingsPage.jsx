@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Card, CardHeader, CardBody, CardTitle, Badge, Button, IconButton,
   Tabs, Modal, InfoBanner, SectionHeader, Label, Input, Select,
@@ -11,6 +11,7 @@ import {
   TRAINING_HISTORY, USERS, TECH_STACK, SOURCES_LINKS, SYSTEM_INFO,
 } from '../lib/mockData';
 import { cx } from '../lib/utils';
+import { getModelInfo } from '../lib/api';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function sourceTone(status) {
@@ -219,6 +220,20 @@ function ModelTab() {
     membershipType: 'gaussian',
   });
 
+  const [modelInfo, setModelInfo] = useState(null);
+  useEffect(() => {
+    getModelInfo()
+      .then(setModelInfo)
+      .catch((err) => console.warn('Не вдалось завантажити model info:', err));
+  }, []);
+
+  const formatDate = (iso) => {
+    if (!iso) return '—';
+    const parts = iso.split('-');
+    return parts.length === 3 ? `${parts[2]}.${parts[1]}.${parts[0]}` : iso;
+  };
+  const fmt = (n) => (n != null ? String(n).replace('.', ',') : '—');
+
   function startRetrain() {
     setConfirmOpen(false);
     setRetraining({ inProgress: true, progress: 0 });
@@ -245,12 +260,12 @@ function ModelTab() {
             {/* Метаданні */}
             <dl className="space-y-2 text-sm">
               {[
-                ['Версія', 'v1.2.3', 'font-mono'],
-                ['Тип', 'ANFIS (Sugeno)', ''],
-                ['Кількість правил', '26', 'tabular-nums'],
-                ['Функцій належності', '26 (7 змінних)', 'tabular-nums'],
-                ['Дата навчання', '02.05.2026', 'tabular-nums'],
-                ['Тривалість', '47 секунд', 'tabular-nums'],
+                ['Версія', modelInfo?.version ?? 'v3.0.0', 'font-mono'],
+                ['Тип', modelInfo?.type ?? 'ANFIS (Sugeno)', ''],
+                ['Кількість правил', String(modelInfo?.rules_count ?? 50), 'tabular-nums'],
+                ['Функцій належності', `${modelInfo?.membership_functions_count ?? 26} (${modelInfo?.input_variables ?? 7} змінних)`, 'tabular-nums'],
+                ['Дата навчання', formatDate(modelInfo?.training_date), 'tabular-nums'],
+                ['Тривалість', `${modelInfo?.training_duration_seconds ?? '—'} секунд`, 'tabular-nums'],
               ].map(([k, v, cls]) => (
                 <div key={k} className="flex justify-between gap-4">
                   <dt className="text-slate-500 dark:text-slate-400">{k}</dt>
@@ -261,9 +276,9 @@ function ModelTab() {
             {/* KPI */}
             <div className="grid grid-cols-3 gap-2">
               {[
-                { label: 'MAPE', value: '2,14', unit: '%' },
-                { label: 'RMSE', value: '245', unit: 'МВт' },
-                { label: 'MAE',  value: '178', unit: 'МВт' },
+                { label: 'MAPE', value: fmt(modelInfo?.metrics?.mape), unit: '%' },
+                { label: 'RMSE', value: fmt(modelInfo?.metrics?.rmse), unit: 'МВт' },
+                { label: 'MAE',  value: fmt(modelInfo?.metrics?.mae),  unit: 'МВт' },
               ].map((m) => (
                 <div key={m.label} className="rounded-lg bg-slate-50 dark:bg-slate-900/40 p-3 border border-slate-200 dark:border-slate-700 text-center">
                   <div className="text-xs text-slate-500 dark:text-slate-400">{m.label}</div>
