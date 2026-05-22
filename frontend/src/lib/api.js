@@ -1,8 +1,5 @@
 /**
  * API клієнт — підключення фронтенду до FastAPI бекенду.
- * Базовий URL береться з .env: VITE_API_URL
- * Локально: http://localhost:8000
- * На Render.com: https://energy-forecast-ua-api.onrender.com
  */
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -35,10 +32,10 @@ export async function getWeatherForecast(hours = 24) {
 }
 
 // ── Прогноз ────────────────────────────────────────────────────────────────
-export async function createForecast({ start, hours, weather, calendar }) {
+export async function createForecast({ start, hours, weather, calendar, weather_source }) {
   return request('/api/forecast/', {
     method: 'POST',
-    body: JSON.stringify({ start, hours, weather, calendar }),
+    body: JSON.stringify({ start, hours, weather, calendar, weather_source }),
   });
 }
 
@@ -50,7 +47,6 @@ export async function getBaseLoadCurve() {
   return request('/api/forecast/base-load');
 }
 
-// Аліас для ForecastPage
 export const getBaseLoad = getBaseLoadCurve;
 
 // ── Модель ─────────────────────────────────────────────────────────────────
