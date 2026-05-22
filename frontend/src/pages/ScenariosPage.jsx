@@ -326,8 +326,7 @@ export default function ScenariosPage() {
               checked={selected.has(s.id)}
               onToggle={() => toggleSelected(s.id)}
               onOpen={() => {
-                showToast({ type: 'info', title: `Відкрито: ${s.name}`, description: 'Перехід до Сценарного аналізу — Етап 5' });
-                navigate('/scenario-analysis');
+                navigate(`/scenario-analysis?id=${s.id}`);
               }}
               onDuplicate={() => handleDuplicate(s)}
               onDelete={() => handleDelete(s.id)}

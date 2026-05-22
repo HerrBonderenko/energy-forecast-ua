@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ComposedChart, Line, Area,
   XAxis, YAxis, CartesianGrid, Tooltip as RTooltip,
@@ -257,7 +257,9 @@ function SaveModal({ open, onClose, onSave }) {
 export default function ScenarioAnalysisPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { scenarios, addScenario } = useScenarios();
+  const { scenarios, addScenario, getScenario } = useScenarios();
+  const [searchParams] = useSearchParams();
+  const scenarioIdFromUrl = searchParams.get('id');
 
   const [dTemp,  setDTemp]  = useState(0);
   const [dCloud, setDCloud] = useState(0);
@@ -304,6 +306,15 @@ export default function ScenarioAnalysisPage() {
     setLoadOpen(false);
     showToast({ type: 'info', title: 'Сценарій завантажено', description: `«${s.name}»` });
   }
+
+  // Авто-завантаження сценарію з URL (при кліку «Відкрити» на сторінці Мої сценарії)
+  useEffect(() => {
+    if (scenarioIdFromUrl && scenarios.length > 0) {
+      const s = getScenario(scenarioIdFromUrl);
+      if (s) loadScenario(s);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenarioIdFromUrl, scenarios.length]);
 
   function handleSave(name, desc) {
     const dir = !computed ? 'neutral' : Math.abs(computed.pct) < 0.5 ? 'neutral' : computed.pct > 0 ? 'up' : 'down';
