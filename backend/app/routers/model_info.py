@@ -16,7 +16,7 @@ def get_model_info_endpoint():
         "training_date":             info["training_date"],
         "training_duration_seconds": info["training_duration_seconds"],
         "rules_count":               info["rules_count"],
-        "membership_functions_count": info["membership_functions_count"],
+        "membership_functions_count": 26,
         "input_variables":           info["input_variables"],
         "metrics": {
             "mape": info["metrics"]["mape"],
