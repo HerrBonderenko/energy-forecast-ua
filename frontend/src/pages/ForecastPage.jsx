@@ -23,14 +23,6 @@ const HORIZON_OPTIONS = [
   { value: '48h', label: '48 годин' },
   { value: '7d',  label: '7 днів' },
 ];
-const PRECIP_OPTIONS = [
-  { value: 'none',         label: 'Немає' },
-  { value: 'rain-light',   label: 'Дощ слабкий' },
-  { value: 'rain-heavy',   label: 'Дощ сильний' },
-  { value: 'snow-light',   label: 'Сніг слабкий' },
-  { value: 'snow-heavy',   label: 'Сніг сильний' },
-  { value: 'thunderstorm', label: 'Гроза' },
-];
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => ({
   value: `${String(h).padStart(2, '0')}:00`,
   label: `${String(h).padStart(2, '0')}:00`,
@@ -272,11 +264,8 @@ export default function ForecastPage() {
   const [horizon, setHorizon] = useState('24h');
   const [weatherSource, setWeatherSource] = useState('api');
   const [temp, setTemp]       = useState(8);
-  const [humidity, setHumidity] = useState(60);
   const [wind, setWind]       = useState(4);
   const [cloud, setCloud]     = useState(40);
-  const [pressure, setPressure] = useState(1013);
-  const [precip, setPrecip]   = useState('none');
   const [isWeekend, setIsWeekend]       = useState(false);
   const [isHoliday, setIsHoliday]       = useState(false);
   const [isPreHoliday, setIsPreHoliday] = useState(false);
@@ -432,14 +421,8 @@ export default function ForecastPage() {
             )}>
               <div className="space-y-4">
                 <SliderField label="Температура"    value={temp}     unit="°C"  decimals={1} min={-25} max={35}   step={0.5} onChange={setTemp} />
-                <SliderField label="Вологість"       value={humidity} unit="%"   decimals={0} min={0}   max={100}  step={1}   onChange={setHumidity} />
                 <SliderField label="Швидкість вітру" value={wind}     unit="м/с" decimals={1} min={0}   max={25}   step={0.5} onChange={setWind} />
                 <SliderField label="Хмарність"       value={cloud}    unit="%"   decimals={0} min={0}   max={100}  step={5}   onChange={setCloud} />
-                <SliderField label="Тиск"            value={pressure} unit="гПа" decimals={0} min={970} max={1040} step={1}   onChange={setPressure} />
-                <div>
-                  <Label className="block mb-1.5 text-xs">Опади</Label>
-                  <Select value={precip} onChange={(v) => setPrecip(v)} options={PRECIP_OPTIONS} />
-                </div>
               </div>
             </div>
 
