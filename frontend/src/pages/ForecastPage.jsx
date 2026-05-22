@@ -322,6 +322,7 @@ export default function ForecastPage() {
         hours:    horizonHours,
         weather:  weatherData,
         calendar: { is_weekend: isWeekend, is_holiday: isHoliday, is_pre_holiday: isPreHoliday, is_school_break: isSchoolBreak },
+        weather_source: weatherSource,  // 'api' або 'manual'
       });
 
       const pts = data.points || [];
