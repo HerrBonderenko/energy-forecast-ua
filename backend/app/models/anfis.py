@@ -261,23 +261,39 @@ def anfis_predict(
 def generate_forecast_series(
     start_iso: str,
     hours: int,
-    weather_params: dict,
+    weather_params,   # dict (один snapshot) або list[dict] (по годинах)
     calendar_params: dict,
 ) -> list:
-    """Генерує серію прогнозів на N годин вперед."""
+    """
+    Генерує серію прогнозів на N годин вперед.
+    weather_params може бути:
+      - dict  → один набір погоди для всіх годин (backward compatible)
+      - list  → окремий dict на кожну годину (погодинна погода)
+    """
     start = datetime.datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+
+    # Нормалізуємо weather_params до списку
+    if isinstance(weather_params, dict):
+        weather_list = [weather_params] * hours
+    else:
+        weather_list = list(weather_params)
+        # доповнюємо якщо бракує
+        while len(weather_list) < hours:
+            weather_list.append(weather_list[-1])
+
     results = []
     for i in range(hours):
         ts = start + datetime.timedelta(hours=i)
-        ci_multiplier = 1.0 + (i // 24) * 0.005  # CI розширюється повільніше
+        ci_multiplier = 1.0 + (i // 24) * 0.005
 
+        w = weather_list[i]
         pred = anfis_predict(
             hour=ts.hour,
             month=ts.month,
             day_of_week=ts.weekday(),
-            temperature=weather_params.get("temperature", 10.0),
-            cloud_cover=weather_params.get("cloud_cover", 50.0),
-            wind_speed=weather_params.get("wind_speed", 5.0),
+            temperature=w.get("temperature", 10.0),
+            cloud_cover=w.get("cloud_cover", 50.0),
+            wind_speed=w.get("wind_speed", 5.0),
             is_holiday=calendar_params.get("is_holiday", False),
             is_pre_holiday=calendar_params.get("is_pre_holiday", False),
             is_school_break=calendar_params.get("is_school_break", False),
@@ -291,6 +307,11 @@ def generate_forecast_series(
             "lower_bound": round(pred["forecast"] - ci_half, 3),
             "upper_bound": round(pred["forecast"] + ci_half, 3),
             "ci_level":    0.95,
+            "weather": {
+                "temperature": round(w.get("temperature", 10.0), 1),
+                "cloud_cover": round(w.get("cloud_cover", 50.0), 0),
+                "wind_speed":  round(w.get("wind_speed", 5.0), 1),
+            },
         })
     return results
 
