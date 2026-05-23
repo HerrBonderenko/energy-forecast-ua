@@ -210,6 +210,43 @@ from pydantic import BaseModel as _BM
 from fastapi import HTTPException as _HE
 
 
+# ── Helper: обчислення приналежності до нечіткої терми ──────────────────────
+def _tri(x, a, b, c):
+    """Трикутна функція належності."""
+    x = float(x)
+    if x <= a or x >= c: return 0.0
+    if x <= b: return (x - a) / (b - a) if b != a else 1.0
+    return (c - x) / (c - b) if c != b else 1.0
+
+
+_TEMP_MFS  = {"мороз":(-35,-10,-2),"холодна":(-5,2,10),"прохолодна":(5,12,18),"помірна":(14,20,26),"тепла":(22,27,32),"спека":(28,35,45)}
+_HOUR_MFS  = {"ніч":(0,0,7),"ранок":(5,9,13),"день":(11,14,19),"вечір":(17,20,25)}
+_CLOUD_MFS = {"ясно":(0,0,35),"хмарно":(25,55,80),"похмуро":(65,100,100)}
+_WIND_MFS  = {"тихий":(0,0,5),"помірний":(3,8,15),"сильний":(12,20,40)}
+_DAY_MFS   = {"робочий":(-0.1,0.0,0.6),"вихідний":(0.4,1.0,1.1)}
+_HOL_MFS   = {"так":(0.4,1.0,1.1),"ні":(-0.1,0.0,0.6)}
+
+
+def _season_val(label, month):
+    m = float(month)
+    if label == "зима":  return 1.0 if int(m) in (12,1,2) else (0.5 if int(m) in (11,3) else 0.0)
+    if label == "весна": return _tri(m,2,4,6)
+    if label == "літо":  return _tri(m,5,7,9)
+    if label == "осінь": return _tri(m,8,10,12)
+    return 0.0
+
+
+def _membership_val(var, label, value):
+    if var == "season":  return _season_val(label, value)
+    if var == "temp":    return _tri(value, *_TEMP_MFS.get(label,  (0,0,0)))
+    if var == "hour":    return _tri(value, *_HOUR_MFS.get(label,  (0,0,0)))
+    if var == "cloud":   return _tri(value, *_CLOUD_MFS.get(label, (0,0,0)))
+    if var == "wind":    return _tri(value, *_WIND_MFS.get(label,  (0,0,0)))
+    if var == "day":     return _tri(value, *_DAY_MFS.get(label,   (0,0,0)))
+    if var == "holiday": return _tri(value, *_HOL_MFS.get(label,   (0,0,0)))
+    return 0.0
+
+
 class AnalyzeRequest(_BM):
     date: str  # "2026-05-09"
     time: str = "18:00"
