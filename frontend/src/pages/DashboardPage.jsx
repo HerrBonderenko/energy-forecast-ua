@@ -462,7 +462,7 @@ function ModelQuality() {
     { label: 'MAE (test 2021)',     value: mae  ? `${fmt2(mae)} МВт` : '…',   footer: 'середня абс. помилка',
       tip: 'Mean Absolute Error — середня абсолютна помилка' },
     { label: 'Джерело даних',       value: null, footer: 'ОЕС України 2017–2021',
-      tip: 'Об\'єднана енергосистема України, годинні дані 2017-2021' },
+      tip: "Об'єднана енергосистема України, годинні дані 2017-2021" },
   ];
 
   return (
@@ -520,9 +520,23 @@ function ModelQuality() {
 }
 
 // ── Root ─────────────────────────────────────────────────────────────────────
+function useLiveTime() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
 export default function DashboardPage() {
   const { showToast } = useToast();
   const [period, setPeriod] = useState('7d');
+  const now = useLiveTime();
+  const timeStr = now.toLocaleString('uk-UA', {
+    day: 'numeric', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
 
   return (
     <div className="space-y-5">
@@ -533,7 +547,7 @@ export default function DashboardPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Стан споживання та якість прогнозу в реальному часі</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">8 травня 2026, 14:32</span>
+          <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">{timeStr}</span>
           <Button
             variant="ghost" size="sm"
             leftIcon={<I.RefreshCw size={14} />}
