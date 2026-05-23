@@ -178,7 +178,7 @@ function DataTab() {
 }
 
 // ── HISTORY TABLE ────────────────────────────────────────────────────────────
-function HistoryTable() {
+function HistoryTable({ refreshKey }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -187,7 +187,20 @@ function HistoryTable() {
       .then(r => r.json())
       .then(d => { setHistory(d.history || []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [refreshKey]);
+
+  // Форматування дати в локальний час (Київ UTC+3)
+  function fmtLocalDate(dateStr) {
+    if (!dateStr) return '—';
+    // Дата приходить у вигляді "2026-05-23 11:03" або ISO. Парсимо як UTC.
+    const iso = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString('uk-UA', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    }).replace(',', '');
+  }
 
   return (
     <Card>
@@ -212,7 +225,7 @@ function HistoryTable() {
               <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">Навчань ще не проводилось</td></tr>
             ) : history.map((t, i) => (
               <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-200 whitespace-nowrap">{t.date}</td>
+                <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-200 whitespace-nowrap">{fmtLocalDate(t.date)}</td>
                 <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">{t.version}</td>
                 <td className="px-4 py-3 tabular-nums whitespace-nowrap">
                   {t.mape_before != null ? (
@@ -248,6 +261,8 @@ function HistoryTable() {
 
 // ── TAB 2: МОДЕЛЬ ────────────────────────────────────────────────────────────
 function ModelTab() {
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+
   const { showToast } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [retraining, setRetraining] = useState({ inProgress: false, progress: 0 });
@@ -304,8 +319,9 @@ function ModelTab() {
                 title: 'Перетренування завершено',
                 description: `${state.result.version} — MAPE ${state.result.metrics.mape}%`,
               });
-              // Оновлюємо інформацію про модель
+              // Оновлюємо інформацію про модель і історію навчань
               getModelInfo().then(setModelInfo).catch(() => {});
+              setHistoryRefreshKey(k => k + 1);
             }
             setRetraining({ inProgress: false, progress: 100 });
           }
@@ -416,7 +432,7 @@ function ModelTab() {
       </Modal>
 
       {/* Історія навчань — реальні дані з БД */}
-      <HistoryTable />
+      <HistoryTable refreshKey={historyRefreshKey} />
     </div>
   );
 }
