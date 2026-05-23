@@ -90,12 +90,6 @@ function DataTab() {
           records:    modelInfo?.rules_count ?? '—',
           lastUpdated: modelInfo?.training_date ?? '—',
         },
-        {
-          sourceName: 'Open-Meteo API',
-          coverage:   'Поточна погода Київ',
-          records:    '24',
-          lastUpdated: now,
-        },
       ]);
       setCacheLoading(false);
     });
