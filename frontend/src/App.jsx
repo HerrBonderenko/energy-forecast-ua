@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -49,6 +50,7 @@ export default function App() {
     <ThemeProvider>
       <ToastProvider>
         <ScenariosProvider>
+          <ErrorBoundary>
           <Routes>
             <Route element={<Layout />}>
               <Route index                    element={<DashboardPage />} />
@@ -62,6 +64,7 @@ export default function App() {
               <Route path="*"                 element={<NotFoundPage />} />
             </Route>
           </Routes>
+          </ErrorBoundary>
           <KeyboardNavigation />
         </ScenariosProvider>
       </ToastProvider>
