@@ -98,12 +98,14 @@ export default function Sidebar({ onClose }) {
     <aside className="flex flex-col h-full w-60 bg-[#F8FAFC] dark:bg-[#0F172A] border-r border-slate-200 dark:border-slate-800 transition-colors">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-4 h-14 shrink-0">
-        <div className="flex items-center justify-center h-8 w-8 rounded-md bg-blue-600 text-white">
-          <I.Zap size={18} stroke={2.25} />
-        </div>
-        <div className="font-semibold text-slate-900 dark:text-slate-100 text-[15px] leading-tight">
-          Energy Forecast UA
-        </div>
+        <NavLink to="/" end onClick={onClose} className="flex items-center gap-2.5 min-w-0 group">
+          <div className="flex items-center justify-center h-8 w-8 rounded-md bg-blue-600 text-white shrink-0 group-hover:bg-blue-700 transition-colors">
+            <I.Zap size={18} stroke={2.25} />
+          </div>
+          <div className="font-semibold text-slate-900 dark:text-slate-100 text-[15px] leading-tight truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+            Energy Forecast UA
+          </div>
+        </NavLink>
         {onClose && (
           <button
             onClick={onClose}
