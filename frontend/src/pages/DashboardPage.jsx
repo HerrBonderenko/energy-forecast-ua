@@ -11,6 +11,39 @@ import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { CHART_DATA, PERIOD_OPTIONS, PERIOD_SUMMARIES, NOW_REF_INDEX, ERROR_DISTRIBUTION } from '../lib/mockData';
 import { cx, fmtDecimal } from '../lib/utils';
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+function Skeleton({ className = '' }) {
+  return (
+    <div className={`animate-pulse rounded bg-slate-200 dark:bg-slate-700 ${className}`} />
+  );
+}
+
+function KpiSkeleton() {
+  return (
+    <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4">
+      <Skeleton className="h-3 w-24 mb-3" />
+      <Skeleton className="h-7 w-28 mb-2" />
+      <Skeleton className="h-3 w-20" />
+    </div>
+  );
+}
+
+function RecentSkeleton() {
+  return (
+    <div className="flex items-center justify-between gap-3 px-2 py-2.5">
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <Skeleton className="h-3.5 w-28" />
+        <Skeleton className="h-3 w-20" />
+      </div>
+      <div className="space-y-1.5 text-right">
+        <Skeleton className="h-3.5 w-16" />
+        <Skeleton className="h-3 w-12" />
+      </div>
+    </div>
+  );
+}
+
+
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -127,6 +160,7 @@ function KpiRow() {
     fetch(`${API_BASE}/api/forecast/preview?hours=2`).then(r=>r.json()).then(setPreview).catch(()=>{});
   }, []);
 
+  const isLoading = !modelInfo && !preview;
   const nextHour = new Date(); nextHour.setHours(nextHour.getHours()+1, 0, 0, 0);
   const nextLabel = `${String(nextHour.getHours()).padStart(2,'0')}:00`;
   const nextFc  = preview?.points?.[1]?.forecast;
@@ -136,6 +170,12 @@ function KpiRow() {
   const trainDate = modelInfo?.training_date
     ? new Date(modelInfo.training_date).toLocaleDateString('uk-UA',{day:'numeric',month:'short',year:'numeric'})
     : '—';
+
+  if (isLoading) return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {[1,2,3,4].map(i => <KpiSkeleton key={i} />)}
+    </div>
+  );
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -162,7 +202,10 @@ function KpiRow() {
             {nextCI && <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">±{nextCI} ГВт (95 % ДІ)</div>}
           </>
         ) : (
-          <div className="mt-1.5 text-base text-slate-400">Завантаження…</div>
+          <div className="mt-1.5 space-y-2">
+            <Skeleton className="h-7 w-28" />
+            <Skeleton className="h-3 w-20" />
+          </div>
         )}
       </div>
 
@@ -180,18 +223,30 @@ function KpiRow() {
             </div>
           </>
         ) : (
-          <div className="mt-1.5 text-base text-slate-400">Завантаження…</div>
+          <div className="mt-1.5 space-y-2">
+            <Skeleton className="h-7 w-28" />
+            <Skeleton className="h-3 w-20" />
+          </div>
         )}
       </div>
 
       {/* 4 — Статус моделі */}
       <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-shadow">
         <div className="text-xs text-slate-500 dark:text-slate-400">Статус моделі</div>
-        <div className="mt-1.5 flex items-center gap-2">
-          <I.CheckCircle size={20} className="text-green-600 dark:text-green-400" />
-          <span className="text-base font-medium text-slate-900 dark:text-slate-100">{version}</span>
-        </div>
-        <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">навчено {trainDate}</div>
+        {version === '—' ? (
+          <div className="mt-1.5 space-y-2">
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+        ) : (
+          <>
+            <div className="mt-1.5 flex items-center gap-2">
+              <I.CheckCircle size={20} className="text-green-600 dark:text-green-400" />
+              <span className="text-base font-medium text-slate-900 dark:text-slate-100">{version}</span>
+            </div>
+            <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">навчено {trainDate}</div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -340,7 +395,9 @@ function RecentForecasts() {
       </div>
       <ul className="flex-1 px-2 pb-1">
         {loading ? (
-          <li className="px-2 py-4 text-sm text-slate-400 text-center">Завантаження…</li>
+          <>
+            {[1,2,3,4,5].map(i => <li key={i}><RecentSkeleton /></li>)}
+          </>
         ) : items.length === 0 ? (
           <li className="px-2 py-4 text-sm text-slate-400 text-center">Ще немає прогнозів</li>
         ) : items.map((f) => (
