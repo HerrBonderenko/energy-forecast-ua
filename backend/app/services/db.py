@@ -56,6 +56,23 @@ def init_db():
             except Exception:
                 pass  # колонка вже існує
 
+        # Таблиця історії навчань
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS training_history (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                started_at   TEXT NOT NULL,
+                finished_at  TEXT NOT NULL,
+                version      TEXT NOT NULL,
+                mape_before  REAL,
+                mape_after   REAL,
+                rmse_after   REAL,
+                mae_after    REAL,
+                duration_s   INTEGER,
+                status       TEXT DEFAULT 'success',
+                error        TEXT
+            )
+        """)
+
         # Таблиця сценаріїв
         conn.execute("""
             CREATE TABLE IF NOT EXISTS scenarios (
@@ -318,5 +335,43 @@ def update_forecast_label(forecast_id: int, name: Optional[str], note: Optional[
         )
         conn.commit()
         return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def save_training_record(version: str, mape_before: float, mape_after: float,
+                          rmse_after: float, mae_after: float, duration_s: int,
+                          started_at: str, finished_at: str,
+                          status: str = "success", error: str = None):
+    """Зберігає запис про навчання моделі."""
+    conn = get_conn()
+    try:
+        conn.execute(
+            """INSERT INTO training_history
+               (started_at, finished_at, version, mape_before, mape_after,
+                rmse_after, mae_after, duration_s, status, error)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (started_at, finished_at, version, mape_before, mape_after,
+             rmse_after, mae_after, duration_s, status, error)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_training_history(limit: int = 20) -> list:
+    """Повертає історію навчань (найновіші спочатку)."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            """SELECT id, started_at, finished_at, version,
+                      mape_before, mape_after, rmse_after, mae_after,
+                      duration_s, status, error
+               FROM training_history
+               ORDER BY started_at DESC
+               LIMIT ?""",
+            (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()

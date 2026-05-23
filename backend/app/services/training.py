@@ -413,6 +413,35 @@ async def retrain_model_async():
                 "mae":  m_test["mae_mw"],
             },
         }
+
+        # Зберігаємо запис про навчання в БД
+        try:
+            from app.services.db import save_training_record
+            old_mape = None
+            try:
+                if MODEL_PATH.exists():
+                    import json as _json
+                    meta_path = MODEL_PATH.parent / "model_metadata.json"
+                    if meta_path.exists():
+                        with open(meta_path) as _f:
+                            _meta = _json.load(_f)
+                        old_mape = _meta.get("metrics", {}).get("test", {}).get("mape")
+            except Exception:
+                pass
+            save_training_record(
+                version=new_version,
+                mape_before=old_mape,
+                mape_after=m_test["mape"],
+                rmse_after=m_test["rmse_mw"],
+                mae_after=m_test["mae_mw"],
+                duration_s=int(duration),
+                started_at=started_iso,
+                finished_at=finished_iso,
+                status="success",
+            )
+        except Exception as _e:
+            print(f"⚠ Не вдалось зберегти запис навчання: {_e}")
+
         _update_state(
             in_progress=False, progress=100,
             message=f"Готово! MAPE={m_test['mape']}%",
@@ -421,6 +450,16 @@ async def retrain_model_async():
 
     except Exception as e:
         finished_iso = datetime.utcnow().isoformat() + "Z"
+        try:
+            from app.services.db import save_training_record
+            save_training_record(
+                version="unknown", mape_before=None, mape_after=None,
+                rmse_after=None, mae_after=None, duration_s=0,
+                started_at=started_iso, finished_at=finished_iso,
+                status="error", error=str(e),
+            )
+        except Exception:
+            pass
         _update_state(
             in_progress=False, progress=0,
             message=f"Помилка: {e}",

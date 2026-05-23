@@ -7,7 +7,7 @@ import {
 import * as I from '../components/ui/Icons';
 import { useToast } from '../contexts/ToastContext';
 import {
-  TRAINING_HISTORY, USERS, TECH_STACK, SOURCES_LINKS, SYSTEM_INFO,
+  USERS, TECH_STACK, SOURCES_LINKS, SYSTEM_INFO,
 } from '../lib/mockData';
 import { cx } from '../lib/utils';
 import { getModelInfo } from '../lib/api';
@@ -346,100 +346,8 @@ function ModelTab() {
         Поточну модель буде замінено після завершення навчання. Бажаєте продовжити?
       </Modal>
 
-      {/* Параметри навчання */}
-      <Card>
-        <div className="px-5 pt-5 pb-3">
-          <CardTitle>Параметри навчання (ANFIS)</CardTitle>
-        </div>
-        <CardBody>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="epochs">Кількість епох</Label>
-              <Input id="epochs" type="number" value={params.epochs} onChange={(e) => setParams((p) => ({ ...p, epochs: +e.target.value }))} className="mt-1.5" />
-            </div>
-            <div>
-              <Label htmlFor="lr">Швидкість навчання (η)</Label>
-              <Input id="lr" type="number" step="0.001" value={params.learningRate} onChange={(e) => setParams((p) => ({ ...p, learningRate: +e.target.value }))} className="mt-1.5" />
-            </div>
-            <div>
-              <Label htmlFor="batch">Розмір батчу</Label>
-              <Input id="batch" type="number" value={params.batchSize} onChange={(e) => setParams((p) => ({ ...p, batchSize: +e.target.value }))} className="mt-1.5" />
-            </div>
-            <div>
-              <Label>Валідаційна вибірка — {params.validationSplit} %</Label>
-              <Slider min={10} max={30} step={1} value={params.validationSplit} onChange={(v) => setParams((p) => ({ ...p, validationSplit: v }))} className="mt-2" />
-            </div>
-            <div className="sm:col-span-2">
-              <Label>Тип функцій належності</Label>
-              <Select
-                value={params.membershipType}
-                onChange={(v) => setParams((p) => ({ ...p, membershipType: v }))}
-                options={[
-                  { value: 'gaussian',    label: 'Гаусівська (Gaussian)' },
-                  { value: 'triangular',  label: 'Трикутна (Triangular)' },
-                  { value: 'bell',        label: 'Дзвіноподібна (Bell-shaped)' },
-                ]}
-                className="mt-1.5"
-              />
-            </div>
-          </div>
-          <div className="mt-5 flex justify-end">
-            <Button
-              leftIcon={<I.Save size={14} />}
-              onClick={() => showToast({ type: 'success', title: 'Параметри збережено' })}
-            >
-              Зберегти параметри
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
-
-      {/* Історія навчань — таблиця з горизонтальним скролом */}
-      <Card>
-        <div className="px-5 pt-5 pb-3">
-          <CardTitle>Історія навчань</CardTitle>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-[560px] w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 border-y border-slate-200 dark:border-slate-700">
-              <tr>
-                <Th>Дата</Th>
-                <Th>Версія</Th>
-                <Th>MAPE до → після</Th>
-                <Th>Час</Th>
-                <Th>Статус</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60">
-              {TRAINING_HISTORY.map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-200 whitespace-nowrap">{t.date}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">{t.version}</td>
-                  <td className="px-4 py-3 tabular-nums whitespace-nowrap">
-                    {t.mapeBefore != null ? (
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {t.mapeBefore.toFixed(2).replace('.', ',')} %{' '}
-                        <span className="text-slate-400">→</span>{' '}
-                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                          {t.mapeAfter.toFixed(2).replace('.', ',')} %
-                        </span>
-                      </span>
-                    ) : <span className="text-slate-400">—</span>}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-slate-600 dark:text-slate-300">{t.duration} с</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {t.status === 'success' ? (
-                      <Badge tone="green"><I.Check size={11} className="mr-1" />Успішно</Badge>
-                    ) : (
-                      <Badge tone="red" title={t.error}><I.X size={11} className="mr-1" />Помилка</Badge>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* Історія навчань — реальні дані з БД */}
+      <HistoryTable />
     </div>
   );
 }

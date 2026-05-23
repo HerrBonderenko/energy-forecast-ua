@@ -107,17 +107,34 @@ def get_fuzzy_rules():
 
 @router.get("/training-history")
 def get_training_history():
+    """Реальна історія навчань з БД."""
+    from app.services.db import get_training_history as db_history
+    records = db_history(limit=20)
+    if records:
+        return {"history": [
+            {
+                "date":       r["finished_at"][:16].replace("T", " "),
+                "version":    r["version"],
+                "mape_before": r["mape_before"],
+                "mape_after": r["mape_after"],
+                "duration_s": r["duration_s"],
+                "status":     r["status"],
+                "error":      r.get("error"),
+            }
+            for r in records
+        ]}
+    # Якщо БД порожня — показуємо поточну модель
     model = _load_model()
     if model:
-        test_mape = model["metrics"]["test"]["mape"]
+        m = model["metrics"]["test"]
         return {"history": [{
-            "date": model["training_date"] + " 14:00",
-            "version": model["version"],
-            "mape_before": round(test_mape + 2.3, 2),
-            "mape_after": test_mape,
-            "duration_s": model["training_duration_seconds"],
-            "status": "success",
-            "dataset": f"ОЕС України 2017–2021 ({model.get('train_years', [2017,2018,2019])})",
+            "date":       model["training_date"] + " 00:00",
+            "version":    model["version"],
+            "mape_before": None,
+            "mape_after":  m["mape"],
+            "duration_s":  model["training_duration_seconds"],
+            "status":      "success",
+            "error":       None,
         }]}
     return {"history": []}
 
