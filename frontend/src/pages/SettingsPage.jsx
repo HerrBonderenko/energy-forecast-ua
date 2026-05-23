@@ -177,6 +177,75 @@ function DataTab() {
   );
 }
 
+// ── HISTORY TABLE ────────────────────────────────────────────────────────────
+function HistoryTable() {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/model/training-history`)
+      .then(r => r.json())
+      .then(d => { setHistory(d.history || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <Card>
+      <div className="px-5 pt-5 pb-3">
+        <CardTitle>Історія навчань</CardTitle>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[560px] w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-800/60 border-y border-slate-200 dark:border-slate-700">
+            <tr>
+              <Th>Дата</Th>
+              <Th>Версія</Th>
+              <Th>MAPE до → після</Th>
+              <Th>Час</Th>
+              <Th>Статус</Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 dark:divide-slate-700/60">
+            {loading ? (
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">Завантаження…</td></tr>
+            ) : history.length === 0 ? (
+              <tr><td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-400">Навчань ще не проводилось</td></tr>
+            ) : history.map((t, i) => (
+              <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-200 whitespace-nowrap">{t.date}</td>
+                <td className="px-4 py-3 font-mono text-xs text-slate-600 dark:text-slate-300">{t.version}</td>
+                <td className="px-4 py-3 tabular-nums whitespace-nowrap">
+                  {t.mape_before != null ? (
+                    <span className="text-slate-700 dark:text-slate-200">
+                      {Number(t.mape_before).toFixed(2).replace('.', ',')} %{' '}
+                      <span className="text-slate-400">→</span>{' '}
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        {Number(t.mape_after).toFixed(2).replace('.', ',')} %
+                      </span>
+                    </span>
+                  ) : t.mape_after != null ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                      {Number(t.mape_after).toFixed(2).replace('.', ',')} %
+                    </span>
+                  ) : <span className="text-slate-400">—</span>}
+                </td>
+                <td className="px-4 py-3 tabular-nums text-slate-600 dark:text-slate-300">{t.duration_s} с</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {t.status === 'success' ? (
+                    <Badge tone="green"><I.Check size={11} className="mr-1" />Успішно</Badge>
+                  ) : (
+                    <Badge tone="red"><I.X size={11} className="mr-1" />Помилка</Badge>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 // ── TAB 2: МОДЕЛЬ ────────────────────────────────────────────────────────────
 function ModelTab() {
   const { showToast } = useToast();
