@@ -2,7 +2,6 @@ import { NavLink } from 'react-router-dom';
 import * as I from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { cx } from '../../lib/utils';
-import Tooltip from '../ui/Tooltip';
 
 // Канонічний NAV — групи зі специфікації артефактів
 const NAV_GROUPS = [
@@ -56,39 +55,39 @@ function Switch({ checked, onChange, ariaLabel }) {
 }
 
 function NavItem({ to, label, icon: IconC, onClick, hotkey, tip }) {
-  const tipContent = (
-    <div>
-      {tip && <div className="font-medium">{tip}</div>}
-      {hotkey && <div className="text-[10px] opacity-70 mt-0.5">{hotkey}</div>}
-    </div>
-  );
+  // Використовуємо нативний title — не обрізається на вузьких екранах
+  const titleText = hotkey ? `${tip || label}\n${hotkey}` : (tip || label);
   return (
-    <Tooltip content={tipContent} position="right" delay={400}>
-      <NavLink
-        to={to}
-        end={to === '/'}
-        onClick={onClick}
-        className={({ isActive }) =>
-          cx(
-            'group relative flex items-center w-full pl-3 pr-3 py-2 rounded-md text-sm font-medium transition-colors',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-            isActive
-              ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300'
-              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
-          )
-        }
-      >
-        {({ isActive }) => (
-          <>
-            {isActive && (
-              <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-blue-600 dark:bg-blue-400" />
-            )}
-            <IconC size={18} className="shrink-0" />
-            <span className="ml-3 truncate">{label}</span>
-          </>
-        )}
-      </NavLink>
-    </Tooltip>
+    <NavLink
+      to={to}
+      end={to === '/'}
+      onClick={onClick}
+      title={titleText}
+      className={({ isActive }) =>
+        cx(
+          'group relative flex items-center w-full pl-3 pr-3 py-2 rounded-md text-sm font-medium transition-colors',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+          isActive
+            ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300'
+            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-blue-600 dark:bg-blue-400" />
+          )}
+          <IconC size={18} className="shrink-0" />
+          <span className="ml-3 truncate flex-1">{label}</span>
+          {hotkey && (
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono shrink-0 ml-2 group-hover:opacity-100 opacity-60">
+              {hotkey.replace('Alt+', '⎇')}
+            </span>
+          )}
+        </>
+      )}
+    </NavLink>
   );
 }
 
