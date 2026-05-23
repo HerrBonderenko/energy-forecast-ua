@@ -50,7 +50,7 @@ export default function Layout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="min-h-screen bg-[#f5f8fb] dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors">
       {/* Mobile top bar */}
       <div className="lg:hidden sticky top-0 z-20 flex items-center justify-between h-14 px-4 bg-white dark:bg-[#0F172A] border-b border-slate-200 dark:border-slate-800">
         <button
