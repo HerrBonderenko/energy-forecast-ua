@@ -1,8 +1,50 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation, Link } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import ToastStack from './ToastStack';
 import * as I from '../ui/Icons';
+
+// Маппінг маршрутів на хлібні крихти
+const BREADCRUMBS = {
+  '/':                    [{ label: 'Dashboard', to: '/' }],
+  '/forecast':            [{ label: 'Прогноз', to: '/forecast' }],
+  '/scenario-analysis':   [{ label: 'Сценарний аналіз', to: '/scenario-analysis' }],
+  '/scenarios':           [{ label: 'Мої сценарії', to: '/scenarios' }],
+  '/compare':             [{ label: 'Порівняння моделей', to: '/compare' }],
+  '/interpretation':      [{ label: 'Інтерпретація', to: '/interpretation' }],
+  '/history':             [{ label: 'Історія прогнозів', to: '/history' }],
+  '/settings':            [{ label: 'Налаштування', to: '/settings' }],
+};
+
+function Breadcrumbs() {
+  const { pathname } = useLocation();
+  const crumbs = BREADCRUMBS[pathname];
+  if (!crumbs || crumbs.length === 0) return null;
+
+  const isLast = (i) => i === crumbs.length - 1;
+
+  return (
+    <nav aria-label="Хлібні крихти" className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 mb-3">
+      <Link to="/" className="hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+        Головна
+      </Link>
+      {crumbs.map((crumb, i) => (
+        <span key={i} className="flex items-center gap-1.5">
+          <I.ChevronRight size={12} />
+          <Link
+            to={crumb.to}
+            className={isLast(i)
+              ? 'text-slate-700 dark:text-slate-300 font-medium pointer-events-none'
+              : 'hover:text-slate-600 dark:hover:text-slate-300 transition-colors'
+            }
+          >
+            {crumb.label}
+          </Link>
+        </span>
+      ))}
+    </nav>
+  );
+}
 
 export default function Layout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -50,6 +92,7 @@ export default function Layout() {
         {/* Main content */}
         <main className="flex-1 lg:ml-60 min-w-0">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
+            <Breadcrumbs />
             <Outlet />
           </div>
         </main>
