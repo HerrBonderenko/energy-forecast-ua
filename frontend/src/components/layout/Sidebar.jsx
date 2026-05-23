@@ -69,7 +69,7 @@ function NavItem({ to, label, icon: IconC, onClick, hotkey, tip }) {
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
           isActive
             ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300'
-            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+            : 'text-slate-800 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800',
         )
       }
     >
