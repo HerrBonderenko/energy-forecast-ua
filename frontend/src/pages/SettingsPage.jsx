@@ -7,7 +7,7 @@ import {
 import * as I from '../components/ui/Icons';
 import { useToast } from '../contexts/ToastContext';
 import {
-  USERS, TECH_STACK, SOURCES_LINKS, SYSTEM_INFO,
+  USERS,
 } from '../lib/mockData';
 import { cx } from '../lib/utils';
 import { getModelInfo } from '../lib/api';
@@ -584,6 +584,15 @@ function UsersTab() {
 
 // ── TAB 4: ПРО СИСТЕМУ ───────────────────────────────────────────────────────
 function AboutTab() {
+  const [modelInfo, setModelInfo] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/model/info`)
+      .then(r => r.json())
+      .then(setModelInfo)
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="space-y-4">
       {/* Загальна інформація */}
@@ -598,11 +607,11 @@ function AboutTab() {
                 </div>
                 <div>
                   <div className="text-lg font-semibold text-slate-900 dark:text-slate-100">Energy Forecast UA</div>
-                  <div className="text-xs font-mono text-slate-500">{SYSTEM_INFO.version}</div>
+                  <div className="text-xs font-mono text-slate-500">{modelInfo?.version ?? '—'}</div>
                 </div>
               </div>
               <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                {SYSTEM_INFO.description}
+                Веб-сервіс для прогнозування погодинного споживання електроенергії в ОЕС України на основі ANFIS — адаптивно-мережевої нечіткої системи виведення.
               </p>
             </div>
             {/* Дані дипломної */}
@@ -630,7 +639,11 @@ function AboutTab() {
         <div className="px-5 pt-5 pb-3"><CardTitle>Технологічний стек</CardTitle></div>
         <CardBody>
           <div className="flex flex-wrap gap-1.5">
-            {TECH_STACK.map((t) => (
+            {[
+              'React 18', 'JavaScript (ES2022)', 'Vite 5', 'React Router 6', 'Tailwind CSS 3', 'Recharts',
+              'FastAPI', 'Python 3.11', 'scikit-fuzzy', 'pandas', 'NumPy', 'SQLite', 'Open-Meteo API',
+              'Vercel', 'Render',
+            ].map((t) => (
               <span key={t} className="inline-flex items-center px-2.5 py-1 text-xs rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">
                 {t}
               </span>
@@ -644,7 +657,13 @@ function AboutTab() {
         <div className="px-5 pt-5 pb-3"><CardTitle>Джерела даних та посилання</CardTitle></div>
         <CardBody>
           <ul className="space-y-2">
-            {SOURCES_LINKS.map((s) => (
+            {[
+              { label: 'Open-Meteo Historical Weather API', url: 'https://open-meteo.com/en/docs/historical-weather-api' },
+              { label: 'НЕК «Укренерго» — погодинний баланс ОЕС України', url: 'https://map.ua-energy.org' },
+              { label: 'ANFIS: Adaptive-Network-Based Fuzzy Inference System (Jang, 1993)', url: 'https://ieeexplore.ieee.org/document/256541' },
+              { label: 'scikit-fuzzy документація', url: 'https://scikit-fuzzy.github.io/scikit-fuzzy/' },
+              { label: 'GitHub репозиторій проекту', url: 'https://github.com/HerrBonderenko/energy-forecast-ua' },
+            ].map((s) => (
               <li key={s.label}>
                 <a
                   href={s.url}
@@ -666,13 +685,13 @@ function AboutTab() {
         <div className="px-5 pt-5 pb-3"><CardTitle>Контакти</CardTitle></div>
         <CardBody>
           <div className="flex flex-col gap-3">
-            <a href="mailto:thesis@example.com" className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400">
+            <a href="mailto:oleh.bondarenko.cpe@nure.ua" className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400">
               <I.Mail size={15} />
-              thesis@example.com
+              oleh.bondarenko.cpe@nure.ua
             </a>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400">
+            <a href="https://github.com/HerrBonderenko/energy-forecast-ua" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400">
               <I.Github size={15} />
-              github.com/example/energy-forecast-ua
+              github.com/HerrBonderenko/energy-forecast-ua
             </a>
           </div>
         </CardBody>
