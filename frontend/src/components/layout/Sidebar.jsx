@@ -2,30 +2,31 @@ import { NavLink } from 'react-router-dom';
 import * as I from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { cx } from '../../lib/utils';
+import Tooltip from '../ui/Tooltip';
 
 // Канонічний NAV — групи зі специфікації артефактів
 const NAV_GROUPS = [
   {
     title: 'Робота',
     items: [
-      { to: '/',                  label: 'Dashboard',          icon: I.LayoutDashboard },
-      { to: '/forecast',          label: 'Прогноз',            icon: I.TrendingUp },
-      { to: '/scenario-analysis', label: 'Сценарний аналіз',   icon: I.Sliders },
-      { to: '/scenarios',         label: 'Мої сценарії',       icon: I.Bookmark },
+      { to: '/',                  label: 'Dashboard',          icon: I.LayoutDashboard, hotkey: 'Alt+1', tip: 'Огляд системи' },
+      { to: '/forecast',          label: 'Прогноз',            icon: I.TrendingUp,      hotkey: 'Alt+2', tip: 'Створити новий прогноз' },
+      { to: '/scenario-analysis', label: 'Сценарний аналіз',   icon: I.Sliders,         hotkey: 'Alt+3', tip: 'Дослідження впливу умов' },
+      { to: '/scenarios',         label: 'Мої сценарії',       icon: I.Bookmark,        hotkey: 'Alt+4', tip: 'Збережені сценарії' },
     ],
   },
   {
     title: 'Аналіз',
     items: [
-      { to: '/compare',        label: 'Порівняння моделей', icon: I.BarChart3 },
-      { to: '/interpretation', label: 'Інтерпретація',      icon: I.Network },
-      { to: '/history',        label: 'Історія прогнозів',  icon: I.History },
+      { to: '/compare',        label: 'Порівняння моделей', icon: I.BarChart3, hotkey: 'Alt+5', tip: 'ANFIS vs LSTM/Prophet/SARIMAX' },
+      { to: '/interpretation', label: 'Інтерпретація',      icon: I.Network,   hotkey: 'Alt+6', tip: 'Структура нечіткої моделі' },
+      { to: '/history',        label: 'Історія прогнозів',  icon: I.History,   hotkey: 'Alt+7', tip: 'Журнал усіх прогнозів' },
     ],
   },
   {
     title: 'Система',
     items: [
-      { to: '/settings', label: 'Налаштування', icon: I.Settings },
+      { to: '/settings', label: 'Налаштування', icon: I.Settings, hotkey: 'Alt+8', tip: 'Управління даними і моделлю' },
     ],
   },
 ];
@@ -54,32 +55,40 @@ function Switch({ checked, onChange, ariaLabel }) {
   );
 }
 
-function NavItem({ to, label, icon: IconC, onClick }) {
+function NavItem({ to, label, icon: IconC, onClick, hotkey, tip }) {
+  const tipContent = (
+    <div>
+      {tip && <div className="font-medium">{tip}</div>}
+      {hotkey && <div className="text-[10px] opacity-70 mt-0.5">{hotkey}</div>}
+    </div>
+  );
   return (
-    <NavLink
-      to={to}
-      end={to === '/'}
-      onClick={onClick}
-      className={({ isActive }) =>
-        cx(
-          'group relative flex items-center w-full pl-3 pr-3 py-2 rounded-md text-sm font-medium transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-          isActive
-            ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300'
-            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
-        )
-      }
-    >
-      {({ isActive }) => (
-        <>
-          {isActive && (
-            <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-blue-600 dark:bg-blue-400" />
-          )}
-          <IconC size={18} className="shrink-0" />
-          <span className="ml-3 truncate">{label}</span>
-        </>
-      )}
-    </NavLink>
+    <Tooltip content={tipContent} position="right" delay={400}>
+      <NavLink
+        to={to}
+        end={to === '/'}
+        onClick={onClick}
+        className={({ isActive }) =>
+          cx(
+            'group relative flex items-center w-full pl-3 pr-3 py-2 rounded-md text-sm font-medium transition-colors',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+            isActive
+              ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-300'
+              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+          )
+        }
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && (
+              <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-blue-600 dark:bg-blue-400" />
+            )}
+            <IconC size={18} className="shrink-0" />
+            <span className="ml-3 truncate">{label}</span>
+          </>
+        )}
+      </NavLink>
+    </Tooltip>
   );
 }
 
@@ -122,6 +131,8 @@ export default function Sidebar({ onClose }) {
                   to={item.to}
                   label={item.label}
                   icon={item.icon}
+                  hotkey={item.hotkey}
+                  tip={item.tip}
                   onClick={onClose}
                 />
               ))}

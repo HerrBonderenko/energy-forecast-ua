@@ -10,6 +10,7 @@ import {
   SectionHeader, Input, Select, ProgressBar, Spinner,
 } from '../components/ui';
 import * as I from '../components/ui/Icons';
+import Tooltip from '../components/ui/Tooltip';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { MEMBERSHIP_FUNCTIONS, PIE_COLORS } from '../lib/mockData';
@@ -126,7 +127,7 @@ function TabMembership() {
   return (
     <div className="space-y-4">
       <InfoBanner tone="blue" icon="Info">
-        Функції належності визначають, як числові вхідні значення перетворюються на нечіткі категорії.
+        <Tooltip content="Криві що визначають ступінь належності значення до нечіткої категорії (від 0 до 1)"><span className="font-medium border-b border-dashed border-blue-300 dark:border-blue-700 cursor-help">Функції належності</span></Tooltip> визначають, як числові вхідні значення перетворюються на нечіткі категорії.
         Модель ANFIS v3.1.0 використовує <span className="font-semibold">7 вхідних змінних</span>: температура, час доби, день тижня (робочий/вихідний), сезон, хмарність, швидкість вітру, державне свято.
       </InfoBanner>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -202,8 +203,8 @@ function TabRules() {
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                 <th className="text-left font-medium px-4 py-2.5 w-10">#</th>
-                <th className="text-left font-medium px-4 py-2.5">Правило (IF…THEN…)</th>
-                <th className="text-left font-medium px-4 py-2.5 w-40">Вага</th>
+                <th className="text-left font-medium px-4 py-2.5"><Tooltip content="База нечітких правил типу ЯКЩО (умови) ТО (наслідок). Кожне правило має консеквент — числове значення яке додається до прогнозу."><span className="border-b border-dashed border-slate-300 dark:border-slate-600 cursor-help">Правило (IF…THEN…)</span></Tooltip></th>
+                <th className="text-left font-medium px-4 py-2.5 w-40"><Tooltip content="Абсолютне значення консеквента — наскільки сильно правило впливає на прогноз"><span className="border-b border-dashed border-slate-300 dark:border-slate-600 cursor-help">Вага</span></Tooltip></th>
               </tr>
             </thead>
             <tbody>
@@ -340,13 +341,13 @@ function TabActiveRules() {
           <Card padding="p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Найсильніші правила</div>
+                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100"><Tooltip content="Топ-5 правил з найбільшою активаційною силою для обраної дати/часу"><span className="border-b border-dashed border-slate-300 dark:border-slate-600 cursor-help">Найсильніші правила</span></Tooltip></div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">Нечіткі правила з найбільшою активаційною силою</div>
               </div>
-              <Badge tone="slate">{analysis.active_rules.length} активних</Badge>
+              <Badge tone="slate">{analysis.active_rules.filter(r => r.weight > 0).length} активних</Badge>
             </div>
             <div className="space-y-2.5">
-              {analysis.active_rules.map((r, i) => {
+              {analysis.active_rules.filter(r => r.weight > 0).map((r, i) => {
                 const tone = r.weight > 0.7 ? 'bg-emerald-500' : r.weight >= 0.4 ? 'bg-amber-500' : 'bg-slate-400';
                 return (
                   <div key={r.id} className="flex items-center gap-2.5">
@@ -373,10 +374,10 @@ function TabActiveRules() {
           {/* Внесок у фінальний прогноз */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             <Card padding="p-4" className="lg:col-span-3">
-              <div className="text-sm font-semibold mb-2 text-slate-900 dark:text-slate-100">Внесок у фінальний прогноз</div>
+              <div className="text-sm font-semibold mb-2 text-slate-900 dark:text-slate-100"><Tooltip content="Як кожне активне правило додає або віднімає від базового рівня для формування підсумкового прогнозу"><span className="border-b border-dashed border-slate-300 dark:border-slate-600 cursor-help">Внесок у фінальний прогноз</span></Tooltip></div>
               <div className="text-xs text-slate-500 dark:text-slate-400 mb-3">Як кожне правило формує прогнозоване значення</div>
               <div className="space-y-2">
-                {analysis.active_rules.map((r, i) => (
+                {analysis.active_rules.filter(r => r.weight > 0).map((r, i) => (
                   <div key={r.id} className="flex items-center gap-2 text-xs">
                     <span className="font-medium text-slate-700 dark:text-slate-300 w-8">R{i + 1}:</span>
                     <span className="flex-1 font-mono text-slate-600 dark:text-slate-400 truncate">{r.condition}</span>
@@ -394,12 +395,12 @@ function TabActiveRules() {
 
             {/* Розподіл впливу */}
             <Card padding="p-4" className="lg:col-span-2">
-              <div className="text-sm font-semibold mb-2 text-slate-900 dark:text-slate-100">Розподіл впливу</div>
+              <div className="text-sm font-semibold mb-2 text-slate-900 dark:text-slate-100"><Tooltip content="Pie-діаграма часток кожного активного правила у фінальному прогнозі"><span className="border-b border-dashed border-slate-300 dark:border-slate-600 cursor-help">Розподіл впливу</span></Tooltip></div>
               <div className="text-xs text-slate-500 dark:text-slate-400 mb-3">Частка кожного правила</div>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
                   <Pie
-                    data={analysis.active_rules.map((r, i) => ({ name: `R${i+1}`, value: Math.abs(r.contribution_gw) }))}
+                    data={analysis.active_rules.filter(r => r.weight > 0).map((r, i) => ({ name: `R${i+1}`, value: Math.abs(r.contribution_gw) }))}
                     dataKey="value"
                     cx="50%" cy="50%"
                     innerRadius={45}

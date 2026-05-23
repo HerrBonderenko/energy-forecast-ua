@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { Button, IconButton, StatusDot } from '../components/ui';
 import * as I from '../components/ui/Icons';
+import Tooltip from '../components/ui/Tooltip';
 import { useToast } from '../contexts/ToastContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { CHART_DATA, PERIOD_OPTIONS, PERIOD_SUMMARIES, NOW_REF_INDEX, ERROR_DISTRIBUTION } from '../lib/mockData';
@@ -199,7 +200,7 @@ function KpiRow() {
               {nextFc.toFixed(2).replace('.',',')}
               <span className="text-base font-normal text-slate-500 dark:text-slate-400"> ГВт</span>
             </div>
-            {nextCI && <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">±{nextCI} ГВт (95 % ДІ)</div>}
+            {nextCI && <div className="mt-1 text-xs text-blue-600 dark:text-blue-400">±{nextCI} ГВт (<Tooltip content="Довірчий інтервал 95% — діапазон у який потрапить факт з ймовірністю 95%"><span className="border-b border-dashed border-blue-300 dark:border-blue-700">95 % ДІ</span></Tooltip>)</div>}
           </>
         ) : (
           <div className="mt-1.5 space-y-2">
@@ -211,7 +212,7 @@ function KpiRow() {
 
       {/* 3 — MAPE моделі */}
       <div className="rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 hover:shadow-md transition-shadow">
-        <div className="text-xs text-slate-500 dark:text-slate-400">MAPE моделі (test 2021)</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400"><Tooltip content="Mean Absolute Percentage Error — середня абсолютна процентна помилка прогнозу на тестовій вибірці 2021 року"><span className="border-b border-dashed border-slate-300 dark:border-slate-600">MAPE</span></Tooltip> моделі (test 2021)</div>
         {mape ? (
           <>
             <div className="mt-1.5 text-2xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
@@ -219,7 +220,7 @@ function KpiRow() {
               <span className="text-base font-normal text-slate-500 dark:text-slate-400"> %</span>
             </div>
             <div className="mt-1 text-xs text-green-600 dark:text-green-400">
-              RMSE {modelInfo?.metrics?.rmse} МВт
+              <Tooltip content="Root Mean Square Error — корінь середньоквадратичної помилки (МВт)"><span className="border-b border-dashed border-green-300 dark:border-green-700">RMSE</span></Tooltip> {modelInfo?.metrics?.rmse} МВт
             </div>
           </>
         ) : (
@@ -454,10 +455,14 @@ function ModelQuality() {
   const fmt2  = (v) => v != null ? String(v).replace('.',',') : '…';
 
   const sparklines = [
-    { label: 'MAPE (test 2021)',    value: mape ? `${fmt2(mape)} %` : '…',    footer: 'тестова вибірка' },
-    { label: 'RMSE (test 2021)',    value: rmse ? `${fmt2(rmse)} МВт` : '…',  footer: 'середньокв. помилка' },
-    { label: 'MAE (test 2021)',     value: mae  ? `${fmt2(mae)} МВт` : '…',   footer: 'середня абс. помилка' },
-    { label: 'Джерело даних',       value: null, footer: 'ОЕС України 2017–2021' },
+    { label: 'MAPE (test 2021)',    value: mape ? `${fmt2(mape)} %` : '…',    footer: 'тестова вибірка',
+      tip: 'Mean Absolute Percentage Error — середня % помилка' },
+    { label: 'RMSE (test 2021)',    value: rmse ? `${fmt2(rmse)} МВт` : '…',  footer: 'середньокв. помилка',
+      tip: 'Root Mean Square Error — корінь середньоквадратичної помилки' },
+    { label: 'MAE (test 2021)',     value: mae  ? `${fmt2(mae)} МВт` : '…',   footer: 'середня абс. помилка',
+      tip: 'Mean Absolute Error — середня абсолютна помилка' },
+    { label: 'Джерело даних',       value: null, footer: 'ОЕС України 2017–2021',
+      tip: 'Об\'єднана енергосистема України, годинні дані 2017-2021' },
   ];
 
   return (
@@ -471,7 +476,7 @@ function ModelQuality() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:divide-x divide-slate-200 dark:divide-slate-700">
         {sparklines.map((s) => (
           <div key={s.label} className="pl-0 md:pl-4 first:pl-0">
-            <div className="text-xs text-slate-500 dark:text-slate-400">{s.label}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{s.tip ? (<Tooltip content={s.tip}><span className="border-b border-dashed border-slate-300 dark:border-slate-600">{s.label}</span></Tooltip>) : s.label}</div>
             <div className="mt-1 text-xl font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
               {s.value ?? '—'}
             </div>
