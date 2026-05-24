@@ -88,9 +88,46 @@ function MembershipCard({ mf }) {
 }
 
 // Які МФ показуємо — ТІЛЬКИ ТІ ЩО В МОДЕЛІ
+
+// Дані трикутних МФ для температури
+function buildTempData() {
+  const terms = [
+    { label: 'мороз',      a: -35, b: -10, c: -2,  color: '#818CF8' },
+    { label: 'холодна',    a: -5,  b: 2,   c: 10,  color: '#60A5FA' },
+    { label: 'прохолодна', a: 5,   b: 12,  c: 18,  color: '#34D399' },
+    { label: 'помірна',    a: 14,  b: 20,  c: 26,  color: '#FBBF24' },
+    { label: 'тепла',      a: 22,  b: 27,  c: 32,  color: '#F97316' },
+    { label: 'спека',      a: 28,  b: 35,  c: 45,  color: '#F43F5E' },
+  ];
+  const points = [];
+  for (let t = -35; t <= 45; t += 1) {
+    const pt = { x: t };
+    terms.forEach(({ label, a, b, c }) => {
+      let v = 0;
+      if (t > a && t < c) {
+        v = t <= b ? (t - a) / (b - a || 1) : (c - t) / (c - b || 1);
+      }
+      pt[label] = +v.toFixed(3);
+    });
+    points.push(pt);
+  }
+  return { points, terms };
+}
+const TEMP_MF = buildTempData();
+
 const ALLOWED_MF_IDS = ['temperature', 'hour', 'cloud', 'wind', 'season', 'weekday-simple', 'holiday-simple'];
 
 const SIMPLE_MFS = [
+  {
+    id: 'temperature-real',
+    title: 'Температура',
+    subtitle: '6 термів — від морозу до спеки',
+    type: 'line',
+    xKey: 'x',
+    xLabel: '°C',
+    lines: TEMP_MF.terms.map(t => ({ key: t.label, label: t.label, color: t.color })),
+    data: TEMP_MF.points,
+  },
   {
     id: 'weekday-simple',
     title: 'День тижня',
@@ -120,9 +157,9 @@ const SIMPLE_MFS = [
 function TabMembership() {
   // Фільтруємо MEMBERSHIP_FUNCTIONS — залишаємо тільки реальні в моделі
   const realMfs = MEMBERSHIP_FUNCTIONS.filter(mf =>
-    ['temperature', 'hour', 'cloud', 'wind', 'season'].includes(mf.id)
+    ['hour', 'cloud', 'wind', 'season'].includes(mf.id)
   );
-  const allMfs = [...realMfs, ...SIMPLE_MFS];
+  const allMfs = [...SIMPLE_MFS, ...realMfs];
 
   return (
     <div className="space-y-4">
