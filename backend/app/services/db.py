@@ -9,7 +9,11 @@ import datetime
 from pathlib import Path
 from typing import Optional
 
-DB_PATH = Path(__file__).parent.parent.parent / "data" / "forecasts.db"
+# Render Disk монтується на /data — постійне сховище між перезапусками
+# Локально (dev) — зберігаємо в папці data/ проекту
+import os
+_IS_RENDER = os.environ.get("RENDER") == "true"
+DB_PATH = Path("/data/forecasts.db") if _IS_RENDER else Path(__file__).parent.parent.parent / "data" / "forecasts.db"
 
 
 def get_conn():
