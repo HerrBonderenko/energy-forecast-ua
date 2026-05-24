@@ -20,10 +20,13 @@ from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 # ─── Конфіг ───────────────────────────────────────────────────────────────────
+# Render Disk монтується на /data — постійне сховище між перезапусками
+import os as _os
+_IS_RENDER   = _os.environ.get("RENDER") == "true"
 DATA_DIR     = Path(__file__).parent.parent.parent / "data"
-CSV_GZ_PATH  = DATA_DIR / "training_data.csv.gz"
-MODEL_PATH   = DATA_DIR / "anfis_model.pkl"
-METRICS_PATH = DATA_DIR / "anfis_model_metrics.json"
+CSV_GZ_PATH  = DATA_DIR / "training_data.csv.gz"  # датасет завжди в коді
+MODEL_PATH   = Path("/data/anfis_model.pkl") if _IS_RENDER else DATA_DIR / "anfis_model.pkl"
+METRICS_PATH = Path("/data/anfis_model_metrics.json") if _IS_RENDER else DATA_DIR / "anfis_model_metrics.json"
 
 KYIV_LAT, KYIV_LON = 50.45, 30.52
 

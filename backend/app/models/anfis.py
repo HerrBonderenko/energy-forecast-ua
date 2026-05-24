@@ -10,7 +10,9 @@ from pathlib import Path
 # ─── Завантаження моделі ──────────────────────────────────────────────────────
 
 _MODEL = None
-_MODEL_PATH = Path(__file__).parent.parent.parent / "data" / "anfis_model.pkl"
+import os as _os
+_IS_RENDER  = _os.environ.get("RENDER") == "true"
+_MODEL_PATH = Path("/data/anfis_model.pkl") if _IS_RENDER else Path(__file__).parent.parent.parent / "data" / "anfis_model.pkl"
 
 
 def _load_model():
